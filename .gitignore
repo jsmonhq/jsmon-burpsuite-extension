@@ -1,12 +1,24 @@
+# Compiled class files (not needed - can be rebuilt)
 *.class
-*.war
-*.ear
-*.log
-.DS_Store
+
+# Build output directory (contains JAR files - should NOT be pushed to git)
+target/
+
+# IDE files
 .idea/
 *.iml
 .vscode/
+.DS_Store
+
+# Editor temporary files
 *.swp
 *.swo
 *~
+
+# Log files
+*.log
+
+# Note: pom.xml and src/ directory are tracked (needed to build JAR)
+# The final JAR file is in target/ directory and is ignored
+# To include the built JAR, remove target/ from this file or use: !target/*.jar
 

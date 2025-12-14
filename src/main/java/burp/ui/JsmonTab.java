@@ -171,6 +171,7 @@ public class JsmonTab extends JPanel {
     private JButton fetchWorkspacesButton;
     private JButton getApiKeyButton;
     private JButton jsmonLinkButton; // Store reference to jsmon.sh button
+    private JButton updateAvailableButton; // Update available button
     private JComboBox<String> workspaceComboBox;
     private java.util.Map<String, Workspace> workspaceMap;
     private JButton createWorkspaceButton;
@@ -384,6 +385,13 @@ public class JsmonTab extends JPanel {
             // Update jsmon.sh link button
             if (jsmonLinkButton != null) {
                 jsmonLinkButton.setForeground(theme.textSecondary);
+            }
+            
+            // Update Available button keeps its amber color regardless of theme
+            if (updateAvailableButton != null) {
+                updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7));
+                updateAvailableButton.setForeground(java.awt.Color.BLACK);
+                updateAvailableButton.repaint();
             }
             
             // Update all cards and labels recursively
@@ -1340,7 +1348,59 @@ public class JsmonTab extends JPanel {
             }
         });
         
-        jsIntelligenceHeader.add(jsmonLinkButton, BorderLayout.EAST);
+        // Create panel for right-side buttons (jsmon.sh link and update button)
+        JPanel rightButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        rightButtonsPanel.setOpaque(false);
+        rightButtonsPanel.add(jsmonLinkButton);
+        
+        // Update Available button (initially hidden)
+        updateAvailableButton = new JButton("🔄 Update Available") {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        updateAvailableButton.setToolTipText("A new version is available! Click to download.");
+        updateAvailableButton.setOpaque(false);
+        updateAvailableButton.setContentAreaFilled(false);
+        updateAvailableButton.setBorderPainted(false);
+        updateAvailableButton.setFocusPainted(false);
+        updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Amber/yellow color
+        updateAvailableButton.setForeground(java.awt.Color.BLACK);
+        updateAvailableButton.setFont(updateAvailableButton.getFont().deriveFont(Font.BOLD, 11f));
+        updateAvailableButton.setPreferredSize(new Dimension(140, 24));
+        updateAvailableButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        updateAvailableButton.setVisible(false); // Hidden by default
+        updateAvailableButton.addActionListener(e -> {
+            try {
+                // Open GitHub repository releases page
+                String repoUrl = "https://github.com/" + GITHUB_REPO_URL + "/releases";
+                java.awt.Desktop.getDesktop().browse(new java.net.URI(repoUrl));
+                appendStatus("✓ Opening GitHub repository releases in browser...");
+            } catch (Exception ex) {
+                appendStatus("✗ Error opening browser: " + ex.getMessage());
+                logging.logToError("Error opening browser: " + ex.getMessage());
+            }
+        });
+        // Add hover effect
+        updateAvailableButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                updateAvailableButton.setBackground(new java.awt.Color(255, 213, 0)); // Lighter yellow on hover
+                updateAvailableButton.repaint();
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Default amber
+                updateAvailableButton.repaint();
+            }
+        });
+        
+        rightButtonsPanel.add(updateAvailableButton);
+        jsIntelligenceHeader.add(rightButtonsPanel, BorderLayout.EAST);
         
         // Add header and sub-tabs to main JS Intelligence panel
         jsIntelligencePanel.add(jsIntelligenceHeader, BorderLayout.NORTH);
@@ -1444,6 +1504,9 @@ public class JsmonTab extends JPanel {
         // Load saved configuration and populate UI
         loadSavedConfiguration();
         
+        // Check for updates in background
+        checkForUpdates();
+        
         // Initial status message
         appendStatus("JSMon Extension loaded. Please configure your API key and workspace.");
     }
@@ -1528,6 +1591,120 @@ public class JsmonTab extends JPanel {
         } catch (Exception e) {
             logging.logToError("Error loading saved configuration: " + e.getMessage());
             appendStatus("✗ Error loading saved configuration: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Check for updates by querying GitHub releases API
+     */
+    private void checkForUpdates() {
+        // Run in background thread to avoid blocking UI
+        new Thread(() -> {
+            try {
+                String currentVersion = "1.0.0"; // Current version from pom.xml
+                String latestVersion = getLatestReleaseVersion();
+                
+                if (latestVersion != null && isNewerVersion(latestVersion, currentVersion)) {
+                    // Show update button
+                    SwingUtilities.invokeLater(() -> {
+                        if (updateAvailableButton != null) {
+                            updateAvailableButton.setVisible(true);
+                            updateAvailableButton.setText("🔄 Update Available (" + latestVersion + ")");
+                            appendStatus("ℹ New version available: " + latestVersion + " (current: " + currentVersion + ")");
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                // Silently fail - update check is not critical
+                logging.logToError("Error checking for updates: " + e.getMessage());
+            }
+        }).start();
+    }
+    
+    /**
+     * GitHub repository URL for update checking
+     * Format: "OWNER/REPO" (e.g., "hackruler/json-burp")
+     */
+    private static final String GITHUB_REPO_URL = "hackruler/json-burp";
+    
+    /**
+     * Get the latest release version from GitHub releases API
+     */
+    
+    private String getLatestReleaseVersion() {
+        // If repo URL is not configured yet, skip update check
+        if (GITHUB_REPO_URL == null || GITHUB_REPO_URL.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // GitHub releases API endpoint
+            // Format: https://api.github.com/repos/OWNER/REPO/releases/latest
+            String apiUrl = "https://api.github.com/repos/" + GITHUB_REPO_URL + "/releases/latest";
+            
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .timeout(java.time.Duration.ofSeconds(5)) // 5 second timeout
+                    .GET()
+                    .build();
+            
+            java.net.http.HttpResponse<String> response = client.send(request, 
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                // Extract tag_name from JSON response
+                // Response format: {"tag_name": "v1.0.1", ...}
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
+                java.util.regex.Matcher matcher = pattern.matcher(body);
+                if (matcher.find()) {
+                    String tag = matcher.group(1);
+                    // Remove 'v' prefix if present
+                    return tag.startsWith("v") ? tag.substring(1) : tag;
+                }
+            } else if (response.statusCode() == 404) {
+                // Repository not found or no releases
+                logging.logToError("GitHub repository or releases not found: " + GITHUB_REPO_URL);
+            }
+        } catch (java.net.http.HttpTimeoutException e) {
+            // Timeout - silently fail, update check is not critical
+            logging.logToError("Update check timeout: " + e.getMessage());
+        } catch (Exception e) {
+            // Silently fail - update check is not critical
+            logging.logToError("Error fetching latest release: " + e.getMessage());
+            return null;
+        }
+        return null;
+    }
+    
+    /**
+     * Compare two version strings to determine if newVersion is newer than currentVersion
+     * Supports semantic versioning (e.g., "1.0.0", "1.0.1", "1.1.0", "2.0.0")
+     */
+    private boolean isNewerVersion(String newVersion, String currentVersion) {
+        try {
+            String[] newParts = newVersion.split("\\.");
+            String[] currentParts = currentVersion.split("\\.");
+            
+            int maxLength = Math.max(newParts.length, currentParts.length);
+            
+            for (int i = 0; i < maxLength; i++) {
+                int newPart = i < newParts.length ? Integer.parseInt(newParts[i]) : 0;
+                int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
+                
+                if (newPart > currentPart) {
+                    return true;
+                } else if (newPart < currentPart) {
+                    return false;
+                }
+            }
+            
+            return false; // Versions are equal
+        } catch (Exception e) {
+            logging.logToError("Error comparing versions: " + e.getMessage());
+            return false;
         }
     }
     

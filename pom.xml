@@ -58,6 +58,9 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!-- Don't create the original JAR backup - only keep the shaded one -->
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>

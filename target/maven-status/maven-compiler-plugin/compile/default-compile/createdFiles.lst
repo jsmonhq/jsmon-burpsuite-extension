@@ -12,6 +12,7 @@ burp/ui/JsmonTab$15.class
 burp/ui/JsmonTab$6.class
 burp/ui/JsmonTab$10.class
 burp/util/JsmonConfig.class
+burp/ui/JsmonTab$20.class
 burp/model/Workspace.class
 burp/ui/JsmonTab$5.class
 burp/ui/JsmonTab.class
@@ -21,6 +22,7 @@ burp/api/JsmonApiClient.class
 burp/ui/JsmonTab$8.class
 burp/ui/JsmonTab$17.class
 burp/ui/JsmonTab$7.class
+burp/ui/JsmonTab$19.class
 burp/ui/JsmonTheme.class
 burp/ui/JsmonTab$14.class
 burp/JsmonExtension.class
