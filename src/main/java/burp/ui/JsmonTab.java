@@ -1684,9 +1684,9 @@ public class JsmonTab extends JPanel {
     
     /**
      * GitHub repository URL for update checking
-     * Format: "OWNER/REPO" (e.g., "hackruler/json-burp")
+     * Format: "OWNER/REPO" (e.g., "jsmonhq/jsmon-burpsuite-extension")
      */
-    private static final String GITHUB_REPO_URL = "hackruler/json-burp";
+    private static final String GITHUB_REPO_URL = "jsmonhq/jsmon-burpsuite-extension";
     
     /**
      * Get the latest release version from GitHub releases API
