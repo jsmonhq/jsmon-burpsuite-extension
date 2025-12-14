@@ -211,6 +211,9 @@ public class JsmonTab extends JPanel {
     private int secretsCurrentPage = 1;
     private int secretsTotalCount = 0; // Store total secrets count
     private JLabel secretsPageLabel; // Store reference to page label for updates
+    private long lastUpdateCheckTime = 0; // Track last update check time
+    private static final long UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+    private long rateLimitResetTime = 0; // Track when rate limit resets
     private int jsUrlsCurrentPage = 1;
     private int apiPathsCurrentPage = 1;
     private int urlsCurrentPage = 1;
@@ -235,6 +238,8 @@ public class JsmonTab extends JPanel {
         SwingUtilities.invokeLater(() -> {
             updateThemeFromParent();
             setupThemeListener();
+            // Check for updates when tab becomes visible (not just on install)
+            checkForUpdates();
         });
     }
     
@@ -316,8 +321,6 @@ public class JsmonTab extends JPanel {
             // Update main components directly
             if (apiKeyField != null) {
                 apiKeyField.setBackground(theme.inputBackground);
-                apiKeyField.setForeground(theme.inputForeground);
-                apiKeyField.setCaretColor(theme.caretColor);
             }
             if (newWorkspaceNameField != null) {
                 newWorkspaceNameField.setBackground(theme.inputBackground);
@@ -535,10 +538,62 @@ public class JsmonTab extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         setBackground(theme.background);
         
-        // Top panel (empty now, jsmon.sh button moved to JS Intelligence panel)
+        // Top panel with Update Available button
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
         topPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0));
+        
+        // Update Available button (initially hidden) - moved to main page
+        updateAvailableButton = new JButton("🔄 Update Available") {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        updateAvailableButton.setToolTipText("A new version is available! Click to download.");
+        updateAvailableButton.setOpaque(false);
+        updateAvailableButton.setContentAreaFilled(false);
+        updateAvailableButton.setBorderPainted(false);
+        updateAvailableButton.setFocusPainted(false);
+        updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Amber/yellow color
+        updateAvailableButton.setForeground(java.awt.Color.BLACK);
+        updateAvailableButton.setFont(updateAvailableButton.getFont().deriveFont(Font.BOLD, 11f));
+        updateAvailableButton.setPreferredSize(new Dimension(140, 24));
+        updateAvailableButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        updateAvailableButton.setVisible(false); // Hidden by default
+        updateAvailableButton.addActionListener(e -> {
+            try {
+                // Open GitHub repository releases page
+                String repoUrl = "https://github.com/" + GITHUB_REPO_URL + "/releases";
+                java.awt.Desktop.getDesktop().browse(new java.net.URI(repoUrl));
+                appendStatus("✓ Opening GitHub repository releases in browser...");
+            } catch (Exception ex) {
+                appendStatus("✗ Error opening browser: " + ex.getMessage());
+                logging.logToError("Error opening browser: " + ex.getMessage());
+            }
+        });
+        // Add hover effect
+        updateAvailableButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                updateAvailableButton.setBackground(new java.awt.Color(255, 213, 0)); // Lighter yellow on hover
+                updateAvailableButton.repaint();
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Default amber
+                updateAvailableButton.repaint();
+            }
+        });
+        
+        // Add update button to top panel (right side)
+        JPanel topRightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        topRightPanel.setOpaque(false);
+        topRightPanel.add(updateAvailableButton);
+        topPanel.add(topRightPanel, BorderLayout.EAST);
         
         // Split pane: Left (configuration) and Right (data display - to be implemented)
         JSplitPane mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
@@ -1348,58 +1403,10 @@ public class JsmonTab extends JPanel {
             }
         });
         
-        // Create panel for right-side buttons (jsmon.sh link and update button)
+        // Create panel for right-side button (jsmon.sh link only - update button moved to main page)
         JPanel rightButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         rightButtonsPanel.setOpaque(false);
         rightButtonsPanel.add(jsmonLinkButton);
-        
-        // Update Available button (initially hidden)
-        updateAvailableButton = new JButton("🔄 Update Available") {
-            @Override
-            protected void paintComponent(java.awt.Graphics g) {
-                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
-                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(getBackground());
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        updateAvailableButton.setToolTipText("A new version is available! Click to download.");
-        updateAvailableButton.setOpaque(false);
-        updateAvailableButton.setContentAreaFilled(false);
-        updateAvailableButton.setBorderPainted(false);
-        updateAvailableButton.setFocusPainted(false);
-        updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Amber/yellow color
-        updateAvailableButton.setForeground(java.awt.Color.BLACK);
-        updateAvailableButton.setFont(updateAvailableButton.getFont().deriveFont(Font.BOLD, 11f));
-        updateAvailableButton.setPreferredSize(new Dimension(140, 24));
-        updateAvailableButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        updateAvailableButton.setVisible(false); // Hidden by default
-        updateAvailableButton.addActionListener(e -> {
-            try {
-                // Open GitHub repository releases page
-                String repoUrl = "https://github.com/" + GITHUB_REPO_URL + "/releases";
-                java.awt.Desktop.getDesktop().browse(new java.net.URI(repoUrl));
-                appendStatus("✓ Opening GitHub repository releases in browser...");
-            } catch (Exception ex) {
-                appendStatus("✗ Error opening browser: " + ex.getMessage());
-                logging.logToError("Error opening browser: " + ex.getMessage());
-            }
-        });
-        // Add hover effect
-        updateAvailableButton.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                updateAvailableButton.setBackground(new java.awt.Color(255, 213, 0)); // Lighter yellow on hover
-                updateAvailableButton.repaint();
-            }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Default amber
-                updateAvailableButton.repaint();
-            }
-        });
-        
-        rightButtonsPanel.add(updateAvailableButton);
         jsIntelligenceHeader.add(rightButtonsPanel, BorderLayout.EAST);
         
         // Add header and sub-tabs to main JS Intelligence panel
@@ -1507,6 +1514,9 @@ public class JsmonTab extends JPanel {
         // Check for updates in background
         checkForUpdates();
         
+        // Start periodic update checking (every 10 seconds for testing)
+        startPeriodicUpdateCheck();
+        
         // Initial status message
         appendStatus("JSMon Extension loaded. Please configure your API key and workspace.");
     }
@@ -1596,29 +1606,80 @@ public class JsmonTab extends JPanel {
     
     /**
      * Check for updates by querying GitHub releases API
+     * Checks periodically (every 24 hours)
      */
     private void checkForUpdates() {
+        long currentTime = System.currentTimeMillis();
+        
+        // Skip if we're rate limited (wait 1 hour after rate limit)
+        if (rateLimitResetTime > 0 && currentTime < rateLimitResetTime) {
+            long remainingMinutes = (rateLimitResetTime - currentTime) / (60 * 1000);
+            logging.logToOutput("JSMon: Skipping update check - rate limited. Resets in ~" + remainingMinutes + " minutes");
+            return;
+        }
+        
+        // Only check if interval has passed since last check
+        if (currentTime - lastUpdateCheckTime < UPDATE_CHECK_INTERVAL && lastUpdateCheckTime > 0) {
+            return; // Skip check if done recently
+        }
+        
+        // Update last check time
+        lastUpdateCheckTime = currentTime;
+        
         // Run in background thread to avoid blocking UI
         new Thread(() -> {
             try {
                 String currentVersion = "1.0.0"; // Current version from pom.xml
+                logging.logToOutput("JSMon: Checking for updates... (current version: " + currentVersion + ")");
+                
                 String latestVersion = getLatestReleaseVersion();
                 
+                logging.logToOutput("JSMon: Latest version from GitHub: " + (latestVersion != null ? latestVersion : "null"));
+                
                 if (latestVersion != null && isNewerVersion(latestVersion, currentVersion)) {
+                    logging.logToOutput("JSMon: Newer version found! Showing update button. Latest: " + latestVersion + ", Current: " + currentVersion);
                     // Show update button
                     SwingUtilities.invokeLater(() -> {
                         if (updateAvailableButton != null) {
+                            logging.logToOutput("JSMon: Setting update button visible");
                             updateAvailableButton.setVisible(true);
                             updateAvailableButton.setText("🔄 Update Available (" + latestVersion + ")");
+                            updateAvailableButton.repaint(); // Ensure button is visible
+                            // Force the parent panel to update layout
+                            if (updateAvailableButton.getParent() != null) {
+                                updateAvailableButton.getParent().revalidate();
+                                updateAvailableButton.getParent().repaint();
+                            }
                             appendStatus("ℹ New version available: " + latestVersion + " (current: " + currentVersion + ")");
+                        } else {
+                            logging.logToError("JSMon: updateAvailableButton is null! Cannot show update button.");
                         }
                     });
+                } else if (latestVersion != null) {
+                    // Log that we're up to date (only in debug)
+                    logging.logToOutput("JSMon: Update check complete - running latest version (" + currentVersion + ")");
+                } else {
+                    logging.logToOutput("JSMon: Could not fetch latest version from GitHub");
                 }
             } catch (Exception e) {
-                // Silently fail - update check is not critical
+                // Log error details for debugging
                 logging.logToError("Error checking for updates: " + e.getMessage());
+                e.printStackTrace();
             }
         }).start();
+    }
+    
+    /**
+     * Start periodic update checking timer (every 24 hours)
+     */
+    private void startPeriodicUpdateCheck() {
+        // Check every hour, but the checkForUpdates() method will only actually check every 24 hours
+        // This allows us to retry sooner if rate limit was hit
+        javax.swing.Timer updateTimer = new javax.swing.Timer(60 * 60 * 1000, e -> { // Check every hour
+            checkForUpdates();
+        });
+        updateTimer.setRepeats(true);
+        updateTimer.start();
     }
     
     /**
@@ -1641,11 +1702,13 @@ public class JsmonTab extends JPanel {
             // GitHub releases API endpoint
             // Format: https://api.github.com/repos/OWNER/REPO/releases/latest
             String apiUrl = "https://api.github.com/repos/" + GITHUB_REPO_URL + "/releases/latest";
+            logging.logToOutput("JSMon: Checking GitHub API: " + apiUrl);
             
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create(apiUrl))
                     .header("Accept", "application/vnd.github.v3+json")
+                    .header("User-Agent", "JSMon-Burp-Extension/1.0.0") // Required by GitHub API
                     .timeout(java.time.Duration.ofSeconds(5)) // 5 second timeout
                     .GET()
                     .build();
@@ -1655,6 +1718,7 @@ public class JsmonTab extends JPanel {
             
             if (response.statusCode() == 200) {
                 String body = response.body();
+                logging.logToOutput("JSMon: GitHub API response status: 200, body length: " + body.length());
                 // Extract tag_name from JSON response
                 // Response format: {"tag_name": "v1.0.1", ...}
                 java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
@@ -1662,11 +1726,48 @@ public class JsmonTab extends JPanel {
                 if (matcher.find()) {
                     String tag = matcher.group(1);
                     // Remove 'v' prefix if present
-                    return tag.startsWith("v") ? tag.substring(1) : tag;
+                    String version = tag.startsWith("v") ? tag.substring(1) : tag;
+                    logging.logToOutput("JSMon: Extracted version tag: " + tag + " -> " + version);
+                    return version;
+                } else {
+                    logging.logToError("JSMon: Could not find 'tag_name' in GitHub API response");
+                    logging.logToOutput("JSMon: Response body preview: " + (body.length() > 200 ? body.substring(0, 200) + "..." : body));
                 }
             } else if (response.statusCode() == 404) {
                 // Repository not found or no releases
-                logging.logToError("GitHub repository or releases not found: " + GITHUB_REPO_URL);
+                logging.logToError("GitHub repository or releases not found: " + GITHUB_REPO_URL + " (Status: 404)");
+            } else if (response.statusCode() == 403) {
+                // Rate limit or forbidden
+                String errorBody = response.body();
+                logging.logToError("GitHub API returned 403 Forbidden.");
+                
+                // Check if it's a rate limit error
+                if (errorBody != null && errorBody.contains("rate limit exceeded")) {
+                    // Set rate limit reset time to 1 hour from now (GitHub rate limit resets hourly)
+                    rateLimitResetTime = System.currentTimeMillis() + (60 * 60 * 1000); // 1 hour
+                    logging.logToError("GitHub API rate limit exceeded. Update checks will resume in 1 hour.");
+                    logging.logToOutput("JSMon: Rate limited - will retry after " + 
+                        new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date(rateLimitResetTime)));
+                    
+                    // Log rate limit information
+                    logging.logToError("JSMon: Rate limit exceeded. Unauthenticated requests have a 60 requests/hour limit.");
+                } else {
+                    // Other 403 error (not rate limit)
+                    logging.logToError("JSMon: 403 Forbidden - not a rate limit error");
+                    if (errorBody != null) {
+                        logging.logToError("Response body: " + (errorBody.length() > 500 ? errorBody.substring(0, 500) + "..." : errorBody));
+                        // Check for authentication errors
+                        if (errorBody.contains("Bad credentials") || errorBody.contains("invalid")) {
+                            logging.logToError("JSMon: Token authentication failed - token may be invalid or expired");
+                        }
+                    }
+                }
+            } else {
+                logging.logToError("GitHub API returned unexpected status code: " + response.statusCode());
+                String errorBody = response.body();
+                if (errorBody != null && errorBody.length() > 0) {
+                    logging.logToError("Response body: " + (errorBody.length() > 500 ? errorBody.substring(0, 500) + "..." : errorBody));
+                }
             }
         } catch (java.net.http.HttpTimeoutException e) {
             // Timeout - silently fail, update check is not critical
@@ -1719,11 +1820,11 @@ public class JsmonTab extends JPanel {
         
         // Title label
         if (title != null && !title.isEmpty()) {
-            JLabel titleLabel = new JLabel(title);
-            titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
-            titleLabel.setForeground(theme.textPrimary);
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
+        titleLabel.setForeground(theme.textPrimary);
             titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
-            card.add(titleLabel, BorderLayout.NORTH);
+        card.add(titleLabel, BorderLayout.NORTH);
         }
         
         return card;
@@ -1992,7 +2093,7 @@ public class JsmonTab extends JPanel {
      * Update page label with "Page X of Y" format
      */
     private void updatePageLabel(JLabel pageLabel, int currentPage, String fieldName) {
-        if (pageLabel != null) {
+            if (pageLabel != null) {
             int totalPages = getTotalPagesForField(fieldName);
             pageLabel.setText("Page " + currentPage + " of " + totalPages);
         }
@@ -2652,7 +2753,7 @@ public class JsmonTab extends JPanel {
                 
                 // Also fetch JS URLs when secrets are fetched (only on first page)
                 if (page == 1) {
-                    fetchAndDisplayJsUrls();
+                fetchAndDisplayJsUrls();
                 }
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() -> {

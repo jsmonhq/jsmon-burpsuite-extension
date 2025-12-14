@@ -8,6 +8,7 @@ public class JsmonConfig {
     private static final String WORKSPACE_ID_KEY = "workspaceId";
     private static final String SCOPED_DOMAIN_KEY = "scopedDomain";
     private static final String AUTOMATE_SCAN_KEY = "automateScan";
+    private static final String GITHUB_TOKEN_KEY = "githubToken";
     
     private MontoyaApi api;
     private PersistedObject persistedObject;
@@ -16,6 +17,7 @@ public class JsmonConfig {
     private String workspaceId;
     private String scopedDomain;
     private boolean automateScan;
+    private String githubToken;
     
     public JsmonConfig(MontoyaApi api) {
         this.api = api;
@@ -43,6 +45,7 @@ public class JsmonConfig {
             String loadedWorkspaceId = persistedObject.getString(WORKSPACE_ID_KEY);
             String loadedScopedDomain = persistedObject.getString(SCOPED_DOMAIN_KEY);
             Boolean loadedAutomateScan = persistedObject.getBoolean(AUTOMATE_SCAN_KEY);
+            String loadedGithubToken = persistedObject.getString(GITHUB_TOKEN_KEY);
             
             // Only assign if values were actually loaded (not null for strings, not false for boolean if it was set)
             if (loadedApiKey != null) {
@@ -56,6 +59,9 @@ public class JsmonConfig {
             }
             if (loadedAutomateScan != null) {
                 this.automateScan = loadedAutomateScan;
+            }
+            if (loadedGithubToken != null) {
+                this.githubToken = loadedGithubToken;
             }
             
             // Log successful load for debugging
@@ -124,6 +130,16 @@ public class JsmonConfig {
             
             persistedObject.setBoolean(AUTOMATE_SCAN_KEY, automateScan);
             
+            if (githubToken != null && !githubToken.isEmpty()) {
+                persistedObject.setString(GITHUB_TOKEN_KEY, githubToken);
+            } else {
+                try {
+                    persistedObject.deleteString(GITHUB_TOKEN_KEY);
+                } catch (Exception e) {
+                    // Ignore if key doesn't exist
+                }
+            }
+            
             // Log successful save for debugging
             if (api != null && api.logging() != null) {
                 api.logging().logToOutput("JSMon: Configuration saved to project data (API key: " + 
@@ -172,6 +188,15 @@ public class JsmonConfig {
     
     public void setAutomateScan(boolean automateScan) {
         this.automateScan = automateScan;
+        saveToPersistence();
+    }
+    
+    public String getGithubToken() {
+        return githubToken;
+    }
+    
+    public void setGithubToken(String githubToken) {
+        this.githubToken = githubToken;
         saveToPersistence();
     }
 }

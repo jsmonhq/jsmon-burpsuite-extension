@@ -147,52 +147,18 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     public void setAutomateScan(boolean automateScan) {
         boolean wasEnabled = config.isAutomateScan();
         config.setAutomateScan(automateScan);
-        
-        // If automatic scanning is being enabled (was disabled, now enabled)
-        // Scan all existing JS files in Burp's history first (only if API key and workspace are configured)
-        if (automateScan && !wasEnabled) {
-            // Clear processed URLs to allow re-scanning
-            clearProcessedUrls();
-            
-            // Check if API key and workspace are configured before scanning
-            String apiKey = config.getApiKey();
-            String workspaceId = config.getWorkspaceId();
-            if (apiKey != null && !apiKey.isEmpty() && workspaceId != null && !workspaceId.isEmpty()) {
-                // Scan existing history in background thread with UI status updates
-                Thread scanThread = new Thread(() -> {
-                    if (tab != null) {
-                        tab.appendStatusMessage("🚀 Automatic scanning enabled - scanning existing JS files...");
-                        String scopedDomain = config.getScopedDomain();
-                        if (scopedDomain != null && !scopedDomain.isEmpty()) {
-                            tab.appendStatusMessage("  Scoped domain: " + scopedDomain);
-                        } else {
-                            tab.appendStatusMessage("  No domain scope - scanning all JS files");
-                        }
-                    }
-                    logging.logToOutput("JSMon: Automatic scanning enabled - scanning existing JS files in history...");
-                    
-                    // Pass callback to update UI in real-time
-                    int count = scanHttpHistory((statusMessage) -> {
-                        if (tab != null) {
-                            tab.appendStatusMessage("  " + statusMessage);
-                        }
-                    });
-                    
-                    if (tab != null) {
-                        tab.appendStatusMessage("✓ Automatic scanning initialized - " + count + " existing JS file(s) processed");
-                        // Note: Secrets are automatically fetched by scanHttpHistory if at least one scan was attempted (success or failure)
-                    }
-                    logging.logToOutput("JSMon: Automatic scanning initialized - " + count + " existing JS file(s) processed");
-                });
-                scanThread.setDaemon(true);
-                scanThread.start();
-            } else {
-                if (tab != null) {
-                    tab.appendStatusMessage("⚠ Automatic scanning enabled - will scan existing files after configuration is saved");
-                }
-                logging.logToOutput("JSMon: Automatic scanning enabled - will scan existing files after configuration is saved");
-            }
-        }
+    }
+    
+    public String getGithubToken() {
+        return config.getGithubToken();
+    }
+    
+    public void setGithubToken(String githubToken) {
+        config.setGithubToken(githubToken);
+    }
+    
+    public boolean isAutomateScan() {
+        return config.isAutomateScan();
     }
     
     /**
@@ -237,10 +203,6 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             scanThread.start();
             }
         }
-    }
-    
-    public boolean isAutomateScan() {
-        return config.isAutomateScan();
     }
     
     public List<Workspace> fetchWorkspaces() {
