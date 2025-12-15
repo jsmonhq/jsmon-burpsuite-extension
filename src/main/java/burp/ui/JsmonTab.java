@@ -21,6 +21,13 @@ public class JsmonTab extends JPanel {
     private Logging logging;
     private JsmonExtension extension;
     
+    /**
+     * Current extension version, resolved from Maven metadata (pom.xml).
+     * We read it from META-INF/maven/com.jsmon/jsmon-burp-extension/pom.properties
+     * which Maven generates using the <version> in pom.xml.
+     */
+    private static final String CURRENT_VERSION = resolveExtensionVersion();
+    
     // Theme support
     // Use JsmonTheme class instead of inner Theme class
     private JsmonTheme theme = JsmonTheme.getCurrentTheme();
@@ -222,6 +229,27 @@ public class JsmonTab extends JPanel {
     private int emailsCurrentPage = 1;
     private int s3BucketsCurrentPage = 1;
     private int invalidNodeModulesCurrentPage = 1;
+    
+    /**
+     * Resolve extension version from Maven's pom.properties written into the JAR.
+     * This avoids hardcoding and always reflects <version> in pom.xml.
+     */
+    private static String resolveExtensionVersion() {
+        try (java.io.InputStream in = JsmonTab.class.getResourceAsStream(
+                "/META-INF/maven/com.jsmon/jsmon-burp-extension/pom.properties")) {
+            if (in != null) {
+                java.util.Properties props = new java.util.Properties();
+                props.load(in);
+                String version = props.getProperty("version");
+                if (version != null && !version.isEmpty()) {
+                    return version;
+                }
+            }
+        } catch (Exception ignored) {
+            // If anything goes wrong, fall back to a safe placeholder
+        }
+        return "unknown";
+    }
     
     public JsmonTab(MontoyaApi api, JsmonExtension extension) {
         this.api = api;
@@ -562,8 +590,9 @@ public class JsmonTab extends JPanel {
         updateAvailableButton.setFocusPainted(false);
         updateAvailableButton.setBackground(new java.awt.Color(255, 193, 7)); // Amber/yellow color
         updateAvailableButton.setForeground(java.awt.Color.BLACK);
-        updateAvailableButton.setFont(updateAvailableButton.getFont().deriveFont(Font.BOLD, 11f));
-        updateAvailableButton.setPreferredSize(new Dimension(140, 24));
+        // Slightly larger font and button size so full text is visible and easier to click
+        updateAvailableButton.setFont(updateAvailableButton.getFont().deriveFont(Font.BOLD, 12f));
+        updateAvailableButton.setPreferredSize(new Dimension(220, 30));
         updateAvailableButton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         updateAvailableButton.setVisible(false); // Hidden by default
         updateAvailableButton.addActionListener(e -> {
@@ -1629,7 +1658,7 @@ public class JsmonTab extends JPanel {
         // Run in background thread to avoid blocking UI
         new Thread(() -> {
             try {
-                String currentVersion = "1.0.0"; // Current version from pom.xml
+                String currentVersion = CURRENT_VERSION; // Version from pom.xml (via pom.properties)
                 logging.logToOutput("JSMon: Checking for updates... (current version: " + currentVersion + ")");
                 
                 String latestVersion = getLatestReleaseVersion();
@@ -1684,9 +1713,9 @@ public class JsmonTab extends JPanel {
     
     /**
      * GitHub repository URL for update checking
-     * Format: "OWNER/REPO" (e.g., "hackruler/json-burp")
+     * Format: "OWNER/REPO" (e.g., "jsmonhq/jsmon-burpsuite-extension")
      */
-    private static final String GITHUB_REPO_URL = "hackruler/json-burp";
+    private static final String GITHUB_REPO_URL = "jsmonhq/jsmon-burpsuite-extension";
     
     /**
      * Get the latest release version from GitHub releases API
