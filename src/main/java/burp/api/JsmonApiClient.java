@@ -188,7 +188,7 @@ public class JsmonApiClient {
      */
     public boolean sendToJsmon(String url, String workspaceId, String apiKey, burp.api.montoya.http.message.requests.HttpRequest request) {
         try {
-            String endpoint = API_BASE_URL + "/uploadUrl?wkspId=" +
+            String endpoint = API_BASE_URL + "/uploadUrl?source=burpsuiteExtensionScan&wkspId=" +
                     URLEncoder.encode(workspaceId, StandardCharsets.UTF_8.toString());
 
             String headersJson = buildHeadersJson(request);
