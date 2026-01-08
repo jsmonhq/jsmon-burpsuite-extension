@@ -2,6 +2,8 @@
 
 A powerful Burp Suite extension that automatically scans JavaScript files using the JSMon API. Discover secrets, API endpoints, domains, and other intelligence from JavaScript files as you browse.
 
+![JSMon Burp Suite Extension Interface](images/image.png)
+
 ## Features
 
 - 🔑 **Easy API Key Configuration** - Enter your JSMon API key directly in the extension
