@@ -184,9 +184,10 @@ public class JsmonApiClient {
     }
     
     /**
-     * Send JavaScript file URL to JSMon for scanning
+     * Send scannable file URL to JSMon for scanning
+     * @return Result object containing success status and error message if failed
      */
-    public boolean sendToJsmon(String url, String workspaceId, String apiKey, burp.api.montoya.http.message.requests.HttpRequest request) {
+    public SendResult sendToJsmon(String url, String workspaceId, String apiKey, burp.api.montoya.http.message.requests.HttpRequest request) {
         try {
             String endpoint = API_BASE_URL + "/uploadUrl?source=burpsuiteExtensionScan&wkspId=" +
                     URLEncoder.encode(workspaceId, StandardCharsets.UTF_8.toString());
@@ -210,21 +211,45 @@ public class JsmonApiClient {
 
             int status = response.statusCode();
             if (status >= 200 && status < 300) {
-                return true;
+                return new SendResult(true, null);
             } else {
-                if (logging != null) {
-                    logging.logToError("JSMon: ✗ Failed to send: " + url + " (HTTP " + status + ")");
-                    if (response.body() != null && !response.body().isEmpty()) {
-                        logging.logToError("JSMon: Response: " + response.body());
-                    }
+                String errorMessage = "HTTP " + status;
+                String responseBody = response.body();
+                if (responseBody != null && !responseBody.isEmpty()) {
+                    errorMessage += " - " + responseBody;
                 }
-                return false;
+                if (logging != null) {
+                    logging.logToError("JSMon: ✗ Failed to send: " + url + " (" + errorMessage + ")");
+                }
+                return new SendResult(false, errorMessage);
             }
         } catch (Exception e) {
+            String errorMessage = e.getMessage();
             if (logging != null) {
-                logging.logToError("JSMon: ✗ Error calling JSMon API for " + url + ": " + e.getMessage());
+                logging.logToError("JSMon: ✗ Error calling JSMon API for " + url + ": " + errorMessage);
             }
-            return false;
+            return new SendResult(false, errorMessage);
+        }
+    }
+    
+    /**
+     * Result class for sendToJsmon operation
+     */
+    public static class SendResult {
+        private final boolean success;
+        private final String errorMessage;
+        
+        public SendResult(boolean success, String errorMessage) {
+            this.success = success;
+            this.errorMessage = errorMessage;
+        }
+        
+        public boolean isSuccess() {
+            return success;
+        }
+        
+        public String getErrorMessage() {
+            return errorMessage;
         }
     }
     

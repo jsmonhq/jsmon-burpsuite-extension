@@ -25,6 +25,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     private JsmonApiClient apiClient;
     private JsmonUrlProcessor urlProcessor;
     private Set<String> processedUrls = ConcurrentHashMap.newKeySet();
+    private volatile Thread currentScanThread = null;
     
     @Override
     public void initialize(MontoyaApi api) {
@@ -63,7 +64,8 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         }
         
         HttpRequest httpRequest = response.initiatingRequest();
-        String url = httpRequest.url();
+        // Get full URL including path (not just endpoint) for extension matching
+        String url = httpRequest.url().toString();
         
         // Check if URL matches scoped domain
         String scopedDomain = config.getScopedDomain();
@@ -73,29 +75,79 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             }
         }
         
-        // Check if it's a JS file
-        if (urlProcessor.isJavaScriptFile(url, response)) {
+        // Extract Content-Type header directly (avoid fetching full response object)
+        String contentType = null;
+        
+        // Try to get Content-Type header directly from HttpResponseReceived (no need for full response object)
+        try {
+            // Method 1: Try headerValue() method directly
+            java.lang.reflect.Method headerValueMethod = response.getClass().getMethod("headerValue", String.class);
+            contentType = (String) headerValueMethod.invoke(response, "Content-Type");
+        } catch (Exception e) {
+            // Method 2: Try headers() method and iterate
+            try {
+            java.lang.reflect.Method headersMethod = response.getClass().getMethod("headers");
+            Object headersObj = headersMethod.invoke(response);
+            if (headersObj != null && headersObj instanceof java.lang.Iterable) {
+                for (Object header : (java.lang.Iterable<?>) headersObj) {
+                    try {
+                        java.lang.reflect.Method nameMethod = header.getClass().getMethod("name");
+                        java.lang.reflect.Method valueMethod = header.getClass().getMethod("value");
+                        String headerName = (String) nameMethod.invoke(header);
+                        if ("Content-Type".equalsIgnoreCase(headerName)) {
+                            contentType = (String) valueMethod.invoke(header);
+                            break;
+                        }
+                        } catch (Exception e2) {
+                        // Continue to next header
+                        }
+                    }
+                }
+            } catch (Exception e2) {
+                // All methods failed
+            }
+        }
+        
+        if (logging != null && contentType != null) {
+            logging.logToOutput("JSMon: Extracted Content-Type header for '" + url + "': " + contentType);
+        }
+        
+        // Check if it's a scannable file (check URL extension and Content-Type)
+        // Use Content-Type string to avoid duplicate extraction (we already have it)
+        boolean isScannable = urlProcessor.isScannableFile(url, contentType);
+        if (logging != null) {
+            logging.logToOutput("JSMon: Scannable check for '" + url + "' (Content-Type: " + (contentType != null ? contentType : "null") + "): " + isScannable);
+        }
+        
+        if (isScannable) {
             // Avoid processing the same URL multiple times
             if (!processedUrls.contains(url)) {
                 processedUrls.add(url);
-                // Process new JS files as they come in
-                processJavaScriptFile(httpRequest, response);
+                logging.logToOutput("JSMon: Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
+                // Process new scannable files as they come in (only need request headers and URL)
+                processScannableFile(httpRequest);
             }
         }
         
         return ResponseReceivedAction.continueWith(response);
     }
     
-    private void processJavaScriptFile(HttpRequest request, burp.api.montoya.http.message.responses.HttpResponse response) {
+    private void processScannableFile(HttpRequest request) {
+        // Check if automatic scanning is still enabled before processing
+        if (!config.isAutomateScan()) {
+            return;
+        }
+        
         String apiKey = config.getApiKey();
         String workspaceId = config.getWorkspaceId();
         
         if (apiKey == null || apiKey.isEmpty() || workspaceId == null || workspaceId.isEmpty()) {
-            logging.logToOutput("JSMon: Skipping JS file - API key or workspace ID not configured");
+            logging.logToOutput("JSMon: Skipping file - API key or workspace ID not configured");
             return;
         }
         
-        String url = request.url();
+        // Get full URL including path (not just endpoint) for extension matching
+        String url = request.url().toString();
         
         // Log to UI if tab is available
         if (tab != null) {
@@ -103,18 +155,23 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         }
         
         // Execute JSMon API call with headers
-        boolean success = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+        burp.api.JsmonApiClient.SendResult result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
         
         // Log result to UI
         if (tab != null) {
-            if (success) {
+            if (result.isSuccess()) {
                 tab.appendStatusMessage("  ✓ Success: " + url);
                 // Fetch secrets after successful scan
                 tab.fetchAndDisplaySecrets();
                 // Refresh user profile to update JSScan credits
                 tab.fetchAndDisplayUserProfile();
             } else {
+                String errorMsg = result.getErrorMessage();
+                if (errorMsg != null && !errorMsg.isEmpty()) {
+                    tab.appendStatusMessage("  ✗ Failed: " + url + " - " + errorMsg);
+            } else {
                 tab.appendStatusMessage("  ✗ Failed: " + url);
+                }
             }
         }
     }
@@ -147,6 +204,14 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     public void setAutomateScan(boolean automateScan) {
         boolean wasEnabled = config.isAutomateScan();
         config.setAutomateScan(automateScan);
+        
+        // If disabling automatic scanning, interrupt any running scan thread
+        if (wasEnabled && !automateScan) {
+            if (currentScanThread != null && currentScanThread.isAlive()) {
+                currentScanThread.interrupt();
+                logging.logToOutput("JSMon: Automatic scanning disabled - stopping current scan");
+            }
+        }
     }
     
     public String getGithubToken() {
@@ -175,31 +240,48 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             
             // Scan existing history in background thread with UI status updates
             Thread scanThread = new Thread(() -> {
+                // Check if automatic scanning is still enabled before starting
+                if (!config.isAutomateScan()) {
+                    return;
+                }
+                
                 if (tab != null) {
-                    tab.appendStatusMessage("🚀 Automatic scanning enabled - scanning existing JS files...");
+                    tab.appendStatusMessage("🚀 Automatic scanning enabled - scanning existing files...");
                         String scopedDomain = config.getScopedDomain();
                     if (scopedDomain != null && !scopedDomain.isEmpty()) {
                         tab.appendStatusMessage("  Scoped domain: " + scopedDomain);
                     } else {
-                        tab.appendStatusMessage("  No domain scope - scanning all JS files");
+                        tab.appendStatusMessage("  No domain scope - scanning all scannable files");
                     }
                 }
-                logging.logToOutput("JSMon: Automatic scanning enabled - scanning existing JS files in history...");
+                logging.logToOutput("JSMon: Automatic scanning enabled - scanning existing files in history...");
                 
                 // Pass callback to update UI in real-time
                 int count = scanHttpHistory((statusMessage) -> {
+                    // Check if automatic scanning was disabled during scan
+                    if (!config.isAutomateScan()) {
+                        if (tab != null) {
+                            tab.appendStatusMessage("  ⚠ Scan stopped - automatic scanning was disabled");
+                        }
+                        logging.logToOutput("JSMon: Scan stopped - automatic scanning was disabled");
+                        return;
+                    }
                     if (tab != null) {
                         tab.appendStatusMessage("  " + statusMessage);
                     }
                 });
                 
-                if (tab != null) {
-                    tab.appendStatusMessage("✓ Automatic scanning initialized - " + count + " existing JS file(s) processed");
-                    // Note: Secrets are automatically fetched by scanHttpHistory if at least one scan was attempted (success or failure)
+                // Only show completion message if automatic scanning is still enabled
+                if (config.isAutomateScan()) {
+                    if (tab != null) {
+                        tab.appendStatusMessage("✓ Automatic scanning initialized - " + count + " existing file(s) processed");
+                        // Note: Secrets are automatically fetched by scanHttpHistory if at least one scan was attempted (success or failure)
+                    }
+                    logging.logToOutput("JSMon: Automatic scanning initialized - " + count + " existing file(s) processed");
                 }
-                logging.logToOutput("JSMon: Automatic scanning initialized - " + count + " existing JS file(s) processed");
             });
             scanThread.setDaemon(true);
+            currentScanThread = scanThread;
             scanThread.start();
             }
         }
@@ -240,19 +322,19 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         int scannedCount = 0;
         int failedCount = 0;
         Set<String> scannedUrls = ConcurrentHashMap.newKeySet();
-        java.util.List<String> jsFiles = new ArrayList<>();
+        java.util.List<String> scannableFiles = new ArrayList<>();
         java.util.Map<String, burp.api.montoya.proxy.ProxyHttpRequestResponse> urlToProxyEntryMap = new java.util.HashMap<>();
         
         try {
             // Get all HTTP history entries from Burp's proxy history
             List<burp.api.montoya.proxy.ProxyHttpRequestResponse> proxyHistory = api.proxy().history();
             
-            // Checking proxy history for JS files
+            // Checking proxy history for scannable files
             if (statusCallback != null) {
                 statusCallback.accept("Found " + proxyHistory.size() + " entries in proxy history");
             }
             
-            // First pass: collect all JS files and store their requests
+            // First pass: collect all scannable files and store their requests
             for (burp.api.montoya.proxy.ProxyHttpRequestResponse proxyEntry : proxyHistory) {
                 try {
                     // Get the URL from the proxy entry
@@ -265,13 +347,74 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                         }
                     }
                     
-                    // Check if it's a JS file by URL
-                    String urlLower = url.toLowerCase();
-                    boolean isJsFile = urlLower.endsWith(".js") || urlLower.contains(".js?") || urlLower.contains(".js#");
+                    // Check if it's a scannable file by URL extension OR Content-Type
+                    // Extract Content-Type header directly (avoid fetching full response object)
+                    String contentType = null;
                     
-                    if (isJsFile && !scannedUrls.contains(url)) {
+                    try {
+                        // Try to get response headers directly from proxy entry
+                        java.lang.reflect.Method responseMethod = proxyEntry.getClass().getMethod("httpResponse");
+                        Object responseObj = responseMethod.invoke(proxyEntry);
+                        if (responseObj != null) {
+                            // Try headerValue() method on response
+                            try {
+                                java.lang.reflect.Method headerValueMethod = responseObj.getClass().getMethod("headerValue", String.class);
+                                contentType = (String) headerValueMethod.invoke(responseObj, "Content-Type");
+                            } catch (Exception e2) {
+                                // Try headers() method
+                                try {
+                                    java.lang.reflect.Method headersMethod = responseObj.getClass().getMethod("headers");
+                                    Object headersObj = headersMethod.invoke(responseObj);
+                                    if (headersObj != null && headersObj instanceof java.lang.Iterable) {
+                                        for (Object header : (java.lang.Iterable<?>) headersObj) {
+                                            try {
+                                                java.lang.reflect.Method nameMethod = header.getClass().getMethod("name");
+                                                java.lang.reflect.Method valueMethod = header.getClass().getMethod("value");
+                                                String headerName = (String) nameMethod.invoke(header);
+                                                if ("Content-Type".equalsIgnoreCase(headerName)) {
+                                                    contentType = (String) valueMethod.invoke(header);
+                                                    break;
+                                                }
+                                            } catch (Exception e3) {
+                                                // Continue
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e3) {
+                                    // Headers not available
+                                }
+                            }
+                        }
+                    } catch (Exception e1) {
+                        // Try alternative method names
+                        try {
+                            java.lang.reflect.Method responseMethod = proxyEntry.getClass().getMethod("response");
+                            Object responseObj = responseMethod.invoke(proxyEntry);
+                            if (responseObj != null) {
+                                try {
+                                    java.lang.reflect.Method headerValueMethod = responseObj.getClass().getMethod("headerValue", String.class);
+                                    contentType = (String) headerValueMethod.invoke(responseObj, "Content-Type");
+                                } catch (Exception e2) {
+                                    // Headers not available
+                                }
+                            }
+                        } catch (Exception e2) {
+                            // Response not available, will check extension only
+                        }
+                    }
+                    
+                    // Use urlProcessor to check BOTH extension AND Content-Type (OR logic)
+                    // This ensures consistent matching with automatic scanning
+                    // Use Content-Type string to avoid duplicate extraction (we already have it)
+                    boolean isScannable = urlProcessor.isScannableFile(url, contentType);
+                    
+                    if (logging != null && isScannable) {
+                        logging.logToOutput("JSMon: History scan - Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
+                    }
+                    
+                    if (isScannable && !scannedUrls.contains(url)) {
                         scannedUrls.add(url);
-                        jsFiles.add(url);
+                        scannableFiles.add(url);
                         
                         // Store the proxy entry for later use to extract headers if possible
                         urlToProxyEntryMap.put(url, proxyEntry);
@@ -282,35 +425,44 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 }
             }
             
-            if (jsFiles.isEmpty()) {
+            if (scannableFiles.isEmpty()) {
                 if (statusCallback != null) {
-                    statusCallback.accept("✗ No JS files found to scan");
+                    statusCallback.accept("✗ No scannable files found to scan");
                 }
-                logging.logToOutput("JSMon: No JS files found to scan");
+                logging.logToOutput("JSMon: No scannable files found to scan");
                 return 0;
             }
             
             if (statusCallback != null) {
-                statusCallback.accept("Found " + jsFiles.size() + " JS file(s) to scan");
+                statusCallback.accept("Found " + scannableFiles.size() + " file(s) to scan");
             }
-            logging.logToOutput("JSMon: Found " + jsFiles.size() + " JS file(s) to scan");
+            logging.logToOutput("JSMon: Found " + scannableFiles.size() + " file(s) to scan");
             
             // Second pass: scan each file sequentially with real-time updates
-            for (int i = 0; i < jsFiles.size(); i++) {
-                String url = jsFiles.get(i);
+            for (int i = 0; i < scannableFiles.size(); i++) {
+                // Check if automatic scanning was disabled (for automatic scans) or thread was interrupted
+                if (config.isAutomateScan() == false || Thread.currentThread().isInterrupted()) {
+                    if (statusCallback != null) {
+                        statusCallback.accept("⚠ Scan stopped by user");
+                    }
+                    logging.logToOutput("JSMon: Scan stopped - automatic scanning disabled or interrupted");
+                    break;
+                }
+                
+                String url = scannableFiles.get(i);
                 int fileNum = i + 1;
                 
                 // Show scanning status
                 if (statusCallback != null) {
-                    statusCallback.accept("[" + fileNum + "/" + jsFiles.size() + "] Scanning: " + url);
+                    statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] Scanning: " + url);
                 }
-                logging.logToOutput("JSMon: [" + fileNum + "/" + jsFiles.size() + "] Scanning: " + url);
+                logging.logToOutput("JSMon: [" + fileNum + "/" + scannableFiles.size() + "] Scanning: " + url);
                 
-                // Get the original request from the proxy entry (with all headers)
+                // Get request headers from proxy entry (avoid fetching full request body)
                 burp.api.montoya.proxy.ProxyHttpRequestResponse proxyEntry = urlToProxyEntryMap.get(url);
                 HttpRequest request = null;
                 if (proxyEntry != null) {
-                    // Try to get request from proxy entry - Montoya API might have different method names
+                    // Try to get request from proxy entry - only need headers, not full body
                     try {
                         request = (HttpRequest) proxyEntry.getClass().getMethod("httpRequest").invoke(proxyEntry);
                     } catch (Exception e1) {
@@ -320,37 +472,43 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                             try {
                                 request = (HttpRequest) proxyEntry.getClass().getMethod("finalRequest").invoke(proxyEntry);
                             } catch (Exception e3) {
-                                logging.logToError("JSMon: Could not extract request from proxy entry, using URL fallback");
+                                // Will use URL fallback
                             }
                         }
                     }
                 }
-                // Fallback: create request from URL if proxy entry not found or request extraction failed
+                // Fallback: create minimal request from URL if proxy entry not found or request extraction failed
+                // This creates a request with just the URL (no headers, but that's okay - buildHeadersJson handles null)
                 if (request == null) {
                     request = HttpRequest.httpRequestFromUrl(url);
                 }
                             
-                // Send to JSMon API and capture result (with headers from original request)
+                // Send to JSMon API and capture result (only headers are extracted, not full request body)
                 processedUrls.add(url);
                 
-                boolean success = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+                burp.api.JsmonApiClient.SendResult result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
                 
-                if (success) {
+                if (result.isSuccess()) {
                     scannedCount++;
                     if (statusCallback != null) {
-                        statusCallback.accept("[" + fileNum + "/" + jsFiles.size() + "] ✓ Success: " + url);
+                        statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] ✓ Success: " + url);
                     }
-                    logging.logToOutput("JSMon: [" + fileNum + "/" + jsFiles.size() + "] ✓ Successfully scanned: " + url);
+                    logging.logToOutput("JSMon: [" + fileNum + "/" + scannableFiles.size() + "] ✓ Successfully scanned: " + url);
                     // Refresh user profile to update JSScan credits after each successful scan
                     if (tab != null) {
                         tab.fetchAndDisplayUserProfile();
                     }
                 } else {
                     failedCount++;
-                    if (statusCallback != null) {
-                        statusCallback.accept("[" + fileNum + "/" + jsFiles.size() + "] ✗ Failed: " + url);
+                    String errorMsg = result.getErrorMessage();
+                    String failureMessage = "[" + fileNum + "/" + scannableFiles.size() + "] ✗ Failed: " + url;
+                    if (errorMsg != null && !errorMsg.isEmpty()) {
+                        failureMessage += " - " + errorMsg;
                     }
-                    logging.logToError("JSMon: [" + fileNum + "/" + jsFiles.size() + "] ✗ Failed to scan: " + url);
+                    if (statusCallback != null) {
+                        statusCallback.accept(failureMessage);
+                    }
+                    logging.logToError("JSMon: " + failureMessage);
                 }
             }
             

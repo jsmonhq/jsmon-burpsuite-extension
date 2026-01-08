@@ -1,13 +1,15 @@
 # JSMon Burp Suite Extension
 
-A powerful Burp Suite extension that automatically scans JavaScript files using the JSMon API. Discover secrets, API endpoints, domains, and other intelligence from JavaScript files as you browse.
+A powerful Burp Suite extension that automatically scans scannable files using the JSMon API. Discover secrets, API endpoints, domains, and other intelligence from web files as you browse.
+
+![JSMon Burp Suite Extension Interface](images/image.png)
 
 ## Features
 
 - 🔑 **Easy API Key Configuration** - Enter your JSMon API key directly in the extension
 - 📁 **Workspace Management** - Fetch existing workspaces or create new ones
 - 🌐 **Domain Scoping** - Limit scanning to specific domains (includes subdomains)
-- ⚡ **Automatic Scanning** - Automatically scan JS files as you browse
+- ⚡ **Automatic Scanning** - Automatically scan scannable files as you browse
 - 📊 **Intelligence Dashboard** - View secrets, JS URLs, API paths, domains, IPs, emails, S3 buckets, and more
 - 📋 **Copy to Clipboard** - One-click copy for all intelligence data
 - 🔄 **Real-time Updates** - See scan results and counts update in real-time
@@ -21,7 +23,7 @@ A powerful Burp Suite extension that automatically scans JavaScript files using 
 
 ## Installation
 
-1. Download the latest `jsmon-burp-extension-1.0.0.jar` file
+1. Download the latest `jsmon-burp-extension-1.1.0.jar` file
 2. Open Burp Suite
 3. Go to the **Extensions** tab
 4. Click the **Add** button
@@ -47,15 +49,15 @@ A powerful Burp Suite extension that automatically scans JavaScript files using 
 ### Step 3: Configure Domain Scoping (Optional)
 
 - Enter domain(s) in the "🌐 Domain Scoping" field (one per line or comma-separated)
-- Leave empty to scan all JS files regardless of domain
+- Leave empty to scan all files regardless of domain
 - Subdomains are automatically included (e.g., `example.com` includes `sub.example.com`)
 
 ### Step 4: Enable Automatic Scanning
 
-- Check **Enable Automatic Scanning** to automatically scan JS files as you browse
+- Check **Enable Automatic Scanning** to automatically scan scannable files as you browse
 - When enabled, the extension will:
-  - Scan all existing JS files in Burp's history
-  - Automatically process new JS files as you browse
+  - Scan all existing scannable files in Burp's history
+  - Automatically process new scannable files as you browse
   - Respect your domain scoping settings
 
 ### Step 5: View Intelligence Data
@@ -63,8 +65,8 @@ A powerful Burp Suite extension that automatically scans JavaScript files using 
 - Click on the **📊 JS-Intelligence Data** tab to view:
   - 🔐 **Secrets** - API keys, tokens, and other secrets found
   - 🔗 **JS URLs** - All JavaScript files discovered
-  - 🛣️ **API Paths** - API endpoints extracted from JS files
-  - 🔗 **URLs** - All URLs found in JavaScript
+  - 🛣️ **API Paths** - API endpoints extracted from files
+  - 🔗 **URLs** - All URLs found in files
   - 🌐 **Domains** - Domains discovered
   - 🌐 **IP Addresses** - IP addresses found
   - 📧 **Emails** - Email addresses discovered
@@ -77,14 +79,14 @@ A powerful Burp Suite extension that automatically scans JavaScript files using 
 
 When automatic scanning is enabled:
 - The extension monitors all HTTP responses in Burp Suite
-- JavaScript files are automatically detected (by `.js` extension or `Content-Type` header)
+- Scannable files are automatically detected (by file extension or `Content-Type` header)
 - Files are sent to JSMon API with all relevant headers (User-Agent, Cookie, Authorization, etc.)
 - Each URL is processed only once to avoid duplicates
 - Results appear in real-time in the intelligence tabs
 
 ### Manual Scanning
 
-1. Click **🚀 Start Manual Scan** to scan all JS files from Burp's HTTP history
+1. Click **🚀 Start Manual Scan** to scan all scannable files from Burp's HTTP history
 2. Progress is shown in the status log
 3. Results are automatically displayed in the intelligence tabs
 
@@ -110,33 +112,33 @@ When automatic scanning is enabled:
 | **API Key** | Your JSMon API key (required) |
 | **Workspace** | The workspace where scan results will be stored (required) |
 | **Scoped Domain** | Domain(s) to limit scanning scope. Leave empty to scan all domains |
-| **Automatic Scanning** | Enable/disable automatic scanning of JS files |
+| **Automatic Scanning** | Enable/disable automatic scanning of scannable files |
 
 ## Understanding the Intelligence Data
 
 ### Secrets
-API keys, tokens, passwords, and other sensitive information found in JavaScript files.
+API keys, tokens, passwords, and other sensitive information found in files.
 
 ### JS URLs
-All JavaScript file URLs that have been scanned. Useful for identifying all JS files in scope.
+All file URLs that have been scanned. Useful for identifying all scannable files in scope.
 
 ### API Paths
-API endpoints and paths extracted from JavaScript files. Great for discovering hidden endpoints.
+API endpoints and paths extracted from files. Great for discovering hidden endpoints.
 
 ### URLs
-All URLs found in JavaScript files, including internal and external links.
+All URLs found in files, including internal and external links.
 
 ### Domains
-All domains discovered in JavaScript files. Helps identify all domains used by the application.
+All domains discovered in files. Helps identify all domains used by the application.
 
 ### IP Addresses
-IP addresses found in JavaScript files, including internal and external IPs.
+IP addresses found in files, including internal and external IPs.
 
 ### Emails
-Email addresses discovered in JavaScript files. Useful for identifying contacts and user emails.
+Email addresses discovered in files. Useful for identifying contacts and user emails.
 
 ### S3 Buckets
-Amazon S3 bucket names found in JavaScript files. Can reveal misconfigured or exposed buckets.
+Amazon S3 bucket names found in files. Can reveal misconfigured or exposed buckets.
 
 ### Invalid Node Modules
 NPM confusion packages detected - packages with typosquatting or suspicious names.
@@ -163,7 +165,7 @@ The status log at the bottom shows:
 - Check your internet connection
 - Look for error messages in the status log
 
-### JS Files Not Being Scanned
+### Files Not Being Scanned
 - Ensure **Automatic Scanning** is enabled
 - Check that the domain matches your scoped domain (if set)
 - Verify the workspace is selected
@@ -183,7 +185,7 @@ The status log at the bottom shows:
 
 ## Tips & Best Practices
 
-1. **Start with Domain Scoping**: Limit your scans to your target domain to avoid scanning unrelated JS files
+1. **Start with Domain Scoping**: Limit your scans to your target domain to avoid scanning unrelated files
 2. **Monitor JSScan Credits**: Check your remaining credits in the User section
 3. **Use Manual Scan First**: Run a manual scan to see what data is available before enabling automatic scanning
 4. **Export Data Regularly**: Use the Copy All buttons to export data for further analysis
@@ -191,7 +193,7 @@ The status log at the bottom shows:
 
 ## Version
 
-**Current Version**: 1.0.0
+**Current Version**: 1.1.0
 
 ## Support
 

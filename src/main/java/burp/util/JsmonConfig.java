@@ -16,7 +16,7 @@ public class JsmonConfig {
     private String apiKey;
     private String workspaceId;
     private String scopedDomain;
-    private boolean automateScan;
+    private boolean automateScan = false; // Default to false - automatic scanning is off by default
     private String githubToken;
     
     public JsmonConfig(MontoyaApi api) {
