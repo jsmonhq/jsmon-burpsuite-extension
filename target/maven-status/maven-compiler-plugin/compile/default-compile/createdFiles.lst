@@ -8,6 +8,7 @@ burp/util/JsmonJsonParser.class
 burp/ui/JsmonTab$1.class
 burp/ui/JsmonTab$13.class
 burp/ui/JsmonTab$18.class
+burp/api/JsmonApiClient$SendResult.class
 burp/ui/JsmonTab$15.class
 burp/ui/JsmonTab$6.class
 burp/ui/JsmonTab$10.class

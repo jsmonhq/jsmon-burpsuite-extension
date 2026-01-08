@@ -118,9 +118,9 @@ public class JsmonUrlProcessor {
     }
     
     /**
-     * Check if response is a scannable file (JavaScript or other supported extensions)
+     * Check if response is a scannable file (JavaScript, HTML, JSON, or other supported extensions)
      */
-    public boolean isJavaScriptFile(String url, burp.api.montoya.http.message.responses.HttpResponse response) {
+    public boolean isScannableFile(String url, burp.api.montoya.http.message.responses.HttpResponse response) {
         // Check URL extension for all supported file types
         if (hasScannableExtension(url)) {
             return true;
@@ -139,7 +139,7 @@ public class JsmonUrlProcessor {
      * Check if a file is scannable based on URL and Content-Type string
      * Overloaded method for cases where we only have Content-Type string
      */
-    public boolean isJavaScriptFile(String url, String contentType) {
+    public boolean isScannableFile(String url, String contentType) {
         // Check URL extension for all supported file types
         boolean hasExtension = hasScannableExtension(url);
         if (logging != null) {
