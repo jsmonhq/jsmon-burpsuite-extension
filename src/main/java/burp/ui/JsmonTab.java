@@ -850,7 +850,7 @@ public class JsmonTab extends JPanel {
         scopedDomainField.setCaretColor(theme.caretColor);
         scopedDomainField.setLineWrap(true);
         scopedDomainField.setWrapStyleWord(true);
-        scopedDomainField.setToolTipText("Enter domain(s), one per line, or separated by comma/space (e.g., example.com\\ntest.com). Leave empty to scan all JS files.");
+        scopedDomainField.setToolTipText("Enter domain(s), one per line, or separated by comma/space (e.g., example.com\\ntest.com). Leave empty to scan all scannable files.");
         scopedDomainField.setPreferredSize(new Dimension(300, 44));
         scopedDomainField.setMaximumSize(new Dimension(300, 60));
         scopedDomainField.setRows(2);
@@ -873,7 +873,7 @@ public class JsmonTab extends JPanel {
         automateContent.setOpaque(false);
         
         automateScanCheckbox = new JCheckBox("Enable Automatic Scanning");
-        automateScanCheckbox.setToolTipText("Automatically scan JS files as you browse (respects scoped domain)");
+        automateScanCheckbox.setToolTipText("Automatically scan files (aspx, asp, cfm, svc, ashx, asmx, cgi, pl, html, htm, js, jsp, jspa, do, php, txt, xml, json, bak, xhtml) as you browse (respects scoped domain)");
         automateScanCheckbox.setOpaque(false);
         automateScanCheckbox.setFont(automateScanCheckbox.getFont().deriveFont(13f));
         automateScanCheckbox.addActionListener(e -> {
@@ -893,7 +893,7 @@ public class JsmonTab extends JPanel {
                     automateScanCheckbox.setSelected(false);
                     extension.setAutomateScan(false);
                 } else {
-                    appendStatus("✓ Automatic scanning enabled - starting scan of existing JS files...");
+                    appendStatus("✓ Automatic scanning enabled - starting scan of existing files...");
                     extension.clearProcessedUrls();
                     // Trigger initial scan if configuration is ready
                     extension.triggerInitialScanIfEnabled();
@@ -909,7 +909,7 @@ public class JsmonTab extends JPanel {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         buttonPanel.setOpaque(false);
         JButton startScanButton = createPrimaryButton("🚀 Start Manual Scan");
-        startScanButton.setToolTipText("Manually scan all JS files from Burp's HTTP history");
+        startScanButton.setToolTipText("Manually scan all scannable files (aspx, asp, cfm, svc, ashx, asmx, cgi, pl, html, htm, js, jsp, jspa, do, php, txt, xml, json, bak, xhtml) from Burp's HTTP history");
         startScanButton.setPreferredSize(new Dimension(200, 35));
         startScanButton.setMaximumSize(new Dimension(200, 35));
         startScanButton.setFont(startScanButton.getFont().deriveFont(Font.BOLD, 12f));
@@ -2608,17 +2608,17 @@ public class JsmonTab extends JPanel {
         extension.setScopedDomain(scopedDomain.isEmpty() ? null : scopedDomain);
         
         appendStatus("🚀 Starting manual scan...");
-        appendStatus("  Scanning JS files from Burp's HTTP history...");
+        appendStatus("  Scanning files from Burp's HTTP history...");
         if (!scopedDomain.isEmpty()) {
             appendStatus("  Scoped domain: " + scopedDomain);
         } else {
-            appendStatus("  No domain scope - scanning all JS files");
+            appendStatus("  No domain scope - scanning all scannable files");
         }
         
         // Run scan in background thread with real-time status updates
         new Thread(() -> {
             try {
-                appendStatus("  Checking HTTP history for JS files...");
+                appendStatus("  Checking HTTP history for scannable files...");
                 
                 // Pass a callback to update UI in real-time
                 int scannedCount = extension.scanHttpHistory((statusMessage) -> {

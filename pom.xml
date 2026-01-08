@@ -6,7 +6,7 @@
 
     <groupId>com.jsmon</groupId>
     <artifactId>jsmon-burp-extension</artifactId>
-    <version>1.0.1</version>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
 
     <name>JSMon Burp Extension</name>

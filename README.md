@@ -21,7 +21,7 @@ A powerful Burp Suite extension that automatically scans JavaScript files using 
 
 ## Installation
 
-1. Download the latest `jsmon-burp-extension-1.0.0.jar` file
+1. Download the latest `jsmon-burp-extension-1.0.1.jar` file
 2. Open Burp Suite
 3. Go to the **Extensions** tab
 4. Click the **Add** button
@@ -191,7 +191,7 @@ The status log at the bottom shows:
 
 ## Version
 
-**Current Version**: 1.0.0
+**Current Version**: 1.1.0
 
 ## Support
 
