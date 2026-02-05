@@ -97,7 +97,7 @@ public class JsmonJsonParser {
             }
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error parsing counts JSON: " + e.getMessage());
+                logging.logToError("Jsmon: Error parsing counts JSON: " + e.getMessage());
             }
         }
     }
@@ -174,7 +174,7 @@ public class JsmonJsonParser {
                 
                 if (!objects.isEmpty() && logging != null) {
                     String sample = objects.get(0);
-                    logging.logToOutput("JSMon: Sample object from intelligence API: " + sample.substring(0, Math.min(300, sample.length())));
+                    logging.logToOutput("Jsmon: Sample object from intelligence API: " + sample.substring(0, Math.min(300, sample.length())));
                 }
                 
                 for (String obj : objects) {
@@ -212,7 +212,7 @@ public class JsmonJsonParser {
             }
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error parsing JS URLs from response: " + e.getMessage());
+                logging.logToError("Jsmon: Error parsing JS URLs from response: " + e.getMessage());
             }
         }
         
