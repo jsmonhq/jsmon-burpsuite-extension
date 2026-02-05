@@ -188,6 +188,7 @@ public class JsmonTab extends JPanel {
     private JLabel userEmailValue;
     private JLabel userLimitsValue;
     private JCheckBox automateScanCheckbox;
+    private JToggleButton vpnModeToggle;
     private JTextArea statusArea;
     
     // Data display tabs
@@ -670,7 +671,7 @@ public class JsmonTab extends JPanel {
                 super.paintComponent(g);
             }
         };
-        getApiKeyButton.setToolTipText("Open JSMon API key settings page");
+        getApiKeyButton.setToolTipText("Open Jsmon API key settings page");
         getApiKeyButton.setOpaque(false);
         getApiKeyButton.setContentAreaFilled(false);
         getApiKeyButton.setBorderPainted(false);
@@ -716,7 +717,7 @@ public class JsmonTab extends JPanel {
         JPanel apiKeyInputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         apiKeyInputPanel.setOpaque(false);
         apiKeyField = createStyledTextField();
-        apiKeyField.setToolTipText("Enter your JSMon API key");
+        apiKeyField.setToolTipText("Enter your Jsmon API key");
         apiKeyField.setPreferredSize(new Dimension(250, 32));
         apiKeyField.setMaximumSize(new Dimension(250, 32));
         // Auto-save API key when user finishes entering it
@@ -867,7 +868,82 @@ public class JsmonTab extends JPanel {
         mainContainer.add(Box.createVerticalStrut(8));
         
         // ========== AUTOMATION SECTION ==========
-        JPanel automateCard = createModernCard("⚡ Automation");
+        JPanel automateCard = createModernCard(""); // Empty title, we'll add custom header with VPN toggle
+        
+        // Create header panel with title on left and VPN toggle on right
+        JPanel automateHeader = new JPanel(new BorderLayout());
+        automateHeader.setOpaque(false);
+        JLabel automateTitle = new JLabel("⚡ Automation");
+        automateTitle.setFont(automateTitle.getFont().deriveFont(Font.BOLD, 14f));
+        automateTitle.setForeground(theme.textPrimary);
+        automateHeader.add(automateTitle, BorderLayout.WEST);
+        
+        // VPN Mode toggle - styled as a modern toggle switch
+        JPanel vpnTogglePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        vpnTogglePanel.setOpaque(false);
+        
+        JLabel vpnLabel = new JLabel("VPN Mode (Response Scan)");
+        vpnLabel.setFont(vpnLabel.getFont().deriveFont(11f));
+        vpnLabel.setForeground(theme.textSecondary);
+        vpnTogglePanel.add(vpnLabel);
+        
+        // Create toggle switch button
+        vpnModeToggle = new JToggleButton() {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                int width = getWidth();
+                int height = getHeight();
+                int trackHeight = 18;
+                int trackWidth = 36;
+                int knobSize = 14;
+                int trackY = (height - trackHeight) / 2;
+                int trackX = (width - trackWidth) / 2;
+                
+                // Draw track
+                if (isSelected()) {
+                    g2.setColor(new Color(76, 175, 80)); // Green when on
+                } else {
+                    g2.setColor(new Color(158, 158, 158)); // Gray when off
+                }
+                g2.fillRoundRect(trackX, trackY, trackWidth, trackHeight, trackHeight, trackHeight);
+                
+                // Draw knob
+                g2.setColor(Color.WHITE);
+                int knobX = isSelected() ? trackX + trackWidth - knobSize - 2 : trackX + 2;
+                int knobY = trackY + (trackHeight - knobSize) / 2;
+                g2.fillOval(knobX, knobY, knobSize, knobSize);
+                
+                g2.dispose();
+            }
+        };
+        vpnModeToggle.setPreferredSize(new Dimension(44, 24));
+        vpnModeToggle.setOpaque(false);
+        vpnModeToggle.setContentAreaFilled(false);
+        vpnModeToggle.setBorderPainted(false);
+        vpnModeToggle.setFocusPainted(false);
+        vpnModeToggle.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        vpnModeToggle.setToolTipText("VPN Mode: When enabled, sends the actual response body directly to Jsmon instead of just the URL. Use when Jsmon cannot access the target URLs directly.");
+        vpnModeToggle.addActionListener(e -> {
+            boolean enabled = vpnModeToggle.isSelected();
+            // Save configuration
+            autoSaveConfiguration();
+            // Update extension setting
+            extension.setVpnMode(enabled);
+            if (enabled) {
+                appendStatus("✓ VPN Mode enabled - Response body will be sent directly to Jsmon");
+            } else {
+                appendStatus("✗ VPN Mode disabled - Only URLs will be sent to Jsmon");
+            }
+            vpnModeToggle.repaint();
+        });
+        vpnTogglePanel.add(vpnModeToggle);
+        
+        automateHeader.add(vpnTogglePanel, BorderLayout.EAST);
+        automateCard.add(automateHeader, BorderLayout.NORTH);
+        
         JPanel automateContent = new JPanel();
         automateContent.setLayout(new BoxLayout(automateContent, BoxLayout.Y_AXIS));
         automateContent.setOpaque(false);
@@ -1405,7 +1481,7 @@ public class JsmonTab extends JPanel {
                 super.paintComponent(g);
             }
         };
-        jsmonLinkButton.setToolTipText("Visit JSMon website");
+        jsmonLinkButton.setToolTipText("Visit Jsmon website");
         jsmonLinkButton.setOpaque(false);
         jsmonLinkButton.setContentAreaFilled(false);
         jsmonLinkButton.setBorderPainted(false);
@@ -1416,7 +1492,7 @@ public class JsmonTab extends JPanel {
         jsmonLinkButton.addActionListener(e -> {
             try {
                 java.awt.Desktop.getDesktop().browse(new java.net.URI("https://jsmon.sh"));
-                appendStatus("✓ Opening JSMon website in browser...");
+                appendStatus("✓ Opening Jsmon website in browser...");
             } catch (Exception ex) {
                 appendStatus("✗ Error opening browser: " + ex.getMessage());
                 logging.logToError("Error opening browser: " + ex.getMessage());
@@ -1547,7 +1623,7 @@ public class JsmonTab extends JPanel {
         startPeriodicUpdateCheck();
         
         // Initial status message
-        appendStatus("JSMon Extension loaded. Please configure your API key and workspace.");
+        appendStatus("Jsmon Extension loaded. Please configure your API key and workspace.");
     }
     
     /**
@@ -1572,6 +1648,10 @@ public class JsmonTab extends JPanel {
             // Load automate scan setting
             boolean savedAutomateScan = extension.isAutomateScan();
             automateScanCheckbox.setSelected(savedAutomateScan);
+            
+            // Load VPN mode setting
+            boolean savedVpnMode = extension.isVpnMode();
+            vpnModeToggle.setSelected(savedVpnMode);
             
             // Load workspace and fetch data if API key and workspace are available
             String savedWorkspaceId = extension.getWorkspaceId();
@@ -1643,7 +1723,7 @@ public class JsmonTab extends JPanel {
         // Skip if we're rate limited (wait 1 hour after rate limit)
         if (rateLimitResetTime > 0 && currentTime < rateLimitResetTime) {
             long remainingMinutes = (rateLimitResetTime - currentTime) / (60 * 1000);
-            logging.logToOutput("JSMon: Skipping update check - rate limited. Resets in ~" + remainingMinutes + " minutes");
+            logging.logToOutput("Jsmon: Skipping update check - rate limited. Resets in ~" + remainingMinutes + " minutes");
             return;
         }
         
@@ -1659,18 +1739,18 @@ public class JsmonTab extends JPanel {
         new Thread(() -> {
             try {
                 String currentVersion = CURRENT_VERSION; // Version from pom.xml (via pom.properties)
-                logging.logToOutput("JSMon: Checking for updates... (current version: " + currentVersion + ")");
+                logging.logToOutput("Jsmon: Checking for updates... (current version: " + currentVersion + ")");
                 
                 String latestVersion = getLatestReleaseVersion();
                 
-                logging.logToOutput("JSMon: Latest version from GitHub: " + (latestVersion != null ? latestVersion : "null"));
+                logging.logToOutput("Jsmon: Latest version from GitHub: " + (latestVersion != null ? latestVersion : "null"));
                 
                 if (latestVersion != null && isNewerVersion(latestVersion, currentVersion)) {
-                    logging.logToOutput("JSMon: Newer version found! Showing update button. Latest: " + latestVersion + ", Current: " + currentVersion);
+                    logging.logToOutput("Jsmon: Newer version found! Showing update button. Latest: " + latestVersion + ", Current: " + currentVersion);
                     // Show update button
                     SwingUtilities.invokeLater(() -> {
                         if (updateAvailableButton != null) {
-                            logging.logToOutput("JSMon: Setting update button visible");
+                            logging.logToOutput("Jsmon: Setting update button visible");
                             updateAvailableButton.setVisible(true);
                             updateAvailableButton.setText("🔄 Update Available (" + latestVersion + ")");
                             updateAvailableButton.repaint(); // Ensure button is visible
@@ -1681,14 +1761,14 @@ public class JsmonTab extends JPanel {
                             }
                             appendStatus("ℹ New version available: " + latestVersion + " (current: " + currentVersion + ")");
                         } else {
-                            logging.logToError("JSMon: updateAvailableButton is null! Cannot show update button.");
+                            logging.logToError("Jsmon: updateAvailableButton is null! Cannot show update button.");
                         }
                     });
                 } else if (latestVersion != null) {
                     // Log that we're up to date (only in debug)
-                    logging.logToOutput("JSMon: Update check complete - running latest version (" + currentVersion + ")");
+                    logging.logToOutput("Jsmon: Update check complete - running latest version (" + currentVersion + ")");
                 } else {
-                    logging.logToOutput("JSMon: Could not fetch latest version from GitHub");
+                    logging.logToOutput("Jsmon: Could not fetch latest version from GitHub");
                 }
             } catch (Exception e) {
                 // Log error details for debugging
@@ -1731,13 +1811,13 @@ public class JsmonTab extends JPanel {
             // GitHub releases API endpoint
             // Format: https://api.github.com/repos/OWNER/REPO/releases/latest
             String apiUrl = "https://api.github.com/repos/" + GITHUB_REPO_URL + "/releases/latest";
-            logging.logToOutput("JSMon: Checking GitHub API: " + apiUrl);
+            logging.logToOutput("Jsmon: Checking GitHub API: " + apiUrl);
             
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create(apiUrl))
                     .header("Accept", "application/vnd.github.v3+json")
-                    .header("User-Agent", "JSMon-Burp-Extension/1.0.0") // Required by GitHub API
+                    .header("User-Agent", "Jsmon-Burp-Extension/1.0.0") // Required by GitHub API
                     .timeout(java.time.Duration.ofSeconds(5)) // 5 second timeout
                     .GET()
                     .build();
@@ -1747,7 +1827,7 @@ public class JsmonTab extends JPanel {
             
             if (response.statusCode() == 200) {
                 String body = response.body();
-                logging.logToOutput("JSMon: GitHub API response status: 200, body length: " + body.length());
+                logging.logToOutput("Jsmon: GitHub API response status: 200, body length: " + body.length());
                 // Extract tag_name from JSON response
                 // Response format: {"tag_name": "v1.0.1", ...}
                 java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
@@ -1756,11 +1836,11 @@ public class JsmonTab extends JPanel {
                     String tag = matcher.group(1);
                     // Remove 'v' prefix if present
                     String version = tag.startsWith("v") ? tag.substring(1) : tag;
-                    logging.logToOutput("JSMon: Extracted version tag: " + tag + " -> " + version);
+                    logging.logToOutput("Jsmon: Extracted version tag: " + tag + " -> " + version);
                     return version;
                 } else {
-                    logging.logToError("JSMon: Could not find 'tag_name' in GitHub API response");
-                    logging.logToOutput("JSMon: Response body preview: " + (body.length() > 200 ? body.substring(0, 200) + "..." : body));
+                    logging.logToError("Jsmon: Could not find 'tag_name' in GitHub API response");
+                    logging.logToOutput("Jsmon: Response body preview: " + (body.length() > 200 ? body.substring(0, 200) + "..." : body));
                 }
             } else if (response.statusCode() == 404) {
                 // Repository not found or no releases
@@ -1775,19 +1855,19 @@ public class JsmonTab extends JPanel {
                     // Set rate limit reset time to 1 hour from now (GitHub rate limit resets hourly)
                     rateLimitResetTime = System.currentTimeMillis() + (60 * 60 * 1000); // 1 hour
                     logging.logToError("GitHub API rate limit exceeded. Update checks will resume in 1 hour.");
-                    logging.logToOutput("JSMon: Rate limited - will retry after " + 
+                    logging.logToOutput("Jsmon: Rate limited - will retry after " + 
                         new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date(rateLimitResetTime)));
                     
                     // Log rate limit information
-                    logging.logToError("JSMon: Rate limit exceeded. Unauthenticated requests have a 60 requests/hour limit.");
+                    logging.logToError("Jsmon: Rate limit exceeded. Unauthenticated requests have a 60 requests/hour limit.");
                 } else {
                     // Other 403 error (not rate limit)
-                    logging.logToError("JSMon: 403 Forbidden - not a rate limit error");
+                    logging.logToError("Jsmon: 403 Forbidden - not a rate limit error");
                     if (errorBody != null) {
                         logging.logToError("Response body: " + (errorBody.length() > 500 ? errorBody.substring(0, 500) + "..." : errorBody));
                         // Check for authentication errors
                         if (errorBody.contains("Bad credentials") || errorBody.contains("invalid")) {
-                            logging.logToError("JSMon: Token authentication failed - token may be invalid or expired");
+                            logging.logToError("Jsmon: Token authentication failed - token may be invalid or expired");
                         }
                     }
                 }
@@ -2410,7 +2490,7 @@ public class JsmonTab extends JPanel {
         
         appendStatus("Starting to fetch workspaces...");
         extension.setApiKey(apiKey);
-        appendStatus("API key set, calling JSMon API...");
+        appendStatus("API key set, calling Jsmon API...");
         fetchAndDisplayUserProfile(true); // Show status when manually fetching
         fetchWorkspacesButton.setEnabled(false);
         fetchWorkspacesButton.setText("Fetching...");
@@ -2710,7 +2790,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display secrets from JSMon
+     * Fetch and display secrets from Jsmon
      */
     /**
      * Fetch and display secrets - always starts from page 1 when called without parameters
@@ -2902,7 +2982,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display JS URLs from JSMon intelligence API
+     * Fetch and display JS URLs from Jsmon intelligence API
      */
     public void fetchAndDisplayJsUrls() {
         fetchAndDisplayJsUrls(1);
@@ -2997,7 +3077,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display API paths from JSMon intelligence API
+     * Fetch and display API paths from Jsmon intelligence API
      */
     public void fetchAndDisplayApiPaths() {
         fetchAndDisplayApiPaths(1);
@@ -3092,7 +3172,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display URLs from JSMon intelligence API
+     * Fetch and display URLs from Jsmon intelligence API
      */
     public void fetchAndDisplayUrls(int page) {
         String apiKey = apiKeyField.getText().trim();
@@ -3149,7 +3229,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display Domains from JSMon intelligence API
+     * Fetch and display Domains from Jsmon intelligence API
      */
     public void fetchAndDisplayDomains(int page) {
         String apiKey = apiKeyField.getText().trim();
@@ -3337,7 +3417,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Parse JSON output from JSMon secrets API
+     * Parse JSON output from Jsmon secrets API
      * Each line is a JSON object with: createdAt, matchedWord, moduleName, severity, source
      */
     private List<Object[]> parseSecretsJson(String output) {

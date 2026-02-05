@@ -31,13 +31,13 @@ public class JsmonApiClient {
     }
     
     /**
-     * Fetch workspaces from JSMon API
+     * Fetch workspaces from Jsmon API
      */
     public List<Workspace> fetchWorkspaces(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
             if (logging != null) {
                 logging.logToError("API key not set");
-                logging.logToOutput("JSMon: API key is null or empty");
+                logging.logToOutput("Jsmon: API key is null or empty");
             }
             return new ArrayList<>();
         }
@@ -52,7 +52,7 @@ public class JsmonApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 if (logging != null) {
-                    logging.logToError("JSMon: getWorkspaces failed (HTTP " + response.statusCode() + ")");
+                    logging.logToError("Jsmon: getWorkspaces failed (HTTP " + response.statusCode() + ")");
                 }
                 return new ArrayList<>();
             }
@@ -103,9 +103,9 @@ public class JsmonApiClient {
 
             if (status < 200 || status >= 300) {
                 if (logging != null) {
-                    logging.logToError("JSMon: createWorkspace failed (HTTP " + status + ")");
+                    logging.logToError("Jsmon: createWorkspace failed (HTTP " + status + ")");
                     if (!body.isEmpty()) {
-                        logging.logToError("JSMon: Response body: " + body);
+                        logging.logToError("Jsmon: Response body: " + body);
                     }
                 }
                 return null;
@@ -121,7 +121,7 @@ public class JsmonApiClient {
                 if (logging != null) {
                     logging.logToError("Could not extract workspace ID from response");
                     if (!body.isEmpty()) {
-                        logging.logToError("JSMon: Raw response: " + body);
+                        logging.logToError("Jsmon: Raw response: " + body);
                     }
                 }
                 return null;
@@ -156,9 +156,9 @@ public class JsmonApiClient {
 
             if (status < 200 || status >= 300) {
                 if (logging != null) {
-                    logging.logToError("JSMon: viewProfile failed (HTTP " + status + ")");
+                    logging.logToError("Jsmon: viewProfile failed (HTTP " + status + ")");
                     if (!body.isEmpty()) {
-                        logging.logToError("JSMon: viewProfile response: " + body);
+                        logging.logToError("Jsmon: viewProfile response: " + body);
                     }
                 }
                 return null;
@@ -177,14 +177,14 @@ public class JsmonApiClient {
             return profile;
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error fetching user profile: " + e.getMessage());
+                logging.logToError("Jsmon: Error fetching user profile: " + e.getMessage());
             }
             return null;
         }
     }
     
     /**
-     * Send scannable file URL to JSMon for scanning
+     * Send scannable file URL to Jsmon for scanning
      * @return Result object containing success status and error message if failed
      */
     public SendResult sendToJsmon(String url, String workspaceId, String apiKey, burp.api.montoya.http.message.requests.HttpRequest request) {
@@ -219,14 +219,14 @@ public class JsmonApiClient {
                     errorMessage += " - " + responseBody;
                 }
                 if (logging != null) {
-                    logging.logToError("JSMon: ✗ Failed to send: " + url + " (" + errorMessage + ")");
+                    logging.logToError("Jsmon: ✗ Failed to send: " + url + " (" + errorMessage + ")");
                 }
                 return new SendResult(false, errorMessage);
             }
         } catch (Exception e) {
             String errorMessage = e.getMessage();
             if (logging != null) {
-                logging.logToError("JSMon: ✗ Error calling JSMon API for " + url + ": " + errorMessage);
+                logging.logToError("Jsmon: ✗ Error calling Jsmon API for " + url + ": " + errorMessage);
             }
             return new SendResult(false, errorMessage);
         }
@@ -250,6 +250,101 @@ public class JsmonApiClient {
         
         public String getErrorMessage() {
             return errorMessage;
+        }
+    }
+    
+    /**
+     * Send file content directly to Jsmon for scanning (VPN Mode)
+     * This sends the actual response body instead of just the URL
+     * @param url The URL of the file (used as filename)
+     * @param responseBody The response body content to scan
+     * @param workspaceId The workspace ID
+     * @param apiKey The API key
+     * @return Result object containing success status and error message if failed
+     */
+    public SendResult sendDirectFileScan(String url, String responseBody, String workspaceId, String apiKey) {
+        try {
+            // Validate response body
+            if (responseBody == null || responseBody.trim().isEmpty()) {
+                if (logging != null) {
+                    logging.logToOutput("Jsmon: VPN Mode - Skipping empty response body for: " + url);
+                }
+                return new SendResult(false, "Empty response body");
+            }
+            
+            String endpoint = API_BASE_URL + "/directFileScan?wkspId=" +
+                    URLEncoder.encode(workspaceId, StandardCharsets.UTF_8.toString());
+
+            // Generate a random boundary for multipart form-data (matching gecko format)
+            String boundaryId = java.util.UUID.randomUUID().toString().replace("-", "");
+            String boundary = "----geckoformboundary" + boundaryId;
+            
+            // Truncate URL if longer than 200 characters, then URL encode
+            String filename = url;
+            if (url.length() > 200) {
+                filename = url.substring(0, 200);
+                if (logging != null) {
+                    logging.logToOutput("Jsmon: VPN Mode - Truncating long URL from " + url.length() + " to 200 chars");
+                }
+            }
+            String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8.toString());
+            
+            // Build multipart form-data body using bytes for proper encoding
+            String CRLF = "\r\n";
+            StringBuilder bodyBuilder = new StringBuilder();
+            bodyBuilder.append("--").append(boundary).append(CRLF);
+            bodyBuilder.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(encodedFilename).append("\"").append(CRLF);
+            bodyBuilder.append("Content-Type: text/plain").append(CRLF);
+            bodyBuilder.append(CRLF);
+            bodyBuilder.append(responseBody);
+            bodyBuilder.append(CRLF);
+            bodyBuilder.append(CRLF);
+            bodyBuilder.append("--").append(boundary).append("--");
+
+            byte[] bodyBytes = bodyBuilder.toString().getBytes(StandardCharsets.UTF_8);
+            
+            if (logging != null) {
+                logging.logToOutput("Jsmon: VPN Mode - Sending " + bodyBytes.length + " bytes (" + responseBody.length() + " chars content) for: " + url);
+                // Log first 200 chars of request for debugging
+                String debugBody = bodyBuilder.toString();
+                if (debugBody.length() > 300) {
+                    debugBody = debugBody.substring(0, 150) + "..." + debugBody.substring(debugBody.length() - 100);
+                }
+                logging.logToOutput("Jsmon: VPN Mode - Request preview: " + debugBody.replace("\r", "\\r").replace("\n", "\\n"));
+            }
+
+            java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .header("X-Jsmon-Key", apiKey.trim())
+                    .POST(BodyPublishers.ofByteArray(bodyBytes))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+            int status = response.statusCode();
+            if (status >= 200 && status < 300) {
+                if (logging != null) {
+                    logging.logToOutput("Jsmon: ✓ VPN Mode - Successfully sent file content for: " + url);
+                }
+                return new SendResult(true, null);
+            } else {
+                String errorMessage = "HTTP " + status;
+                String responseBodyStr = response.body();
+                if (responseBodyStr != null && !responseBodyStr.isEmpty()) {
+                    errorMessage += " - " + responseBodyStr;
+                }
+                if (logging != null) {
+                    logging.logToError("Jsmon: ✗ VPN Mode - Failed to send: " + url + " (" + errorMessage + ")");
+                }
+                return new SendResult(false, errorMessage);
+            }
+        } catch (Exception e) {
+            String errorMessage = e.getMessage();
+            if (logging != null) {
+                logging.logToError("Jsmon: ✗ VPN Mode - Error calling Jsmon API for " + url + ": " + errorMessage);
+            }
+            return new SendResult(false, errorMessage);
         }
     }
     
@@ -304,7 +399,7 @@ public class JsmonApiClient {
                 }
             } catch (Exception e2) {
                 if (logging != null) {
-                    logging.logToError("JSMon: Error extracting headers: " + e2.getMessage());
+                    logging.logToError("Jsmon: Error extracting headers: " + e2.getMessage());
                 }
             }
         }
@@ -338,7 +433,7 @@ public class JsmonApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 if (logging != null) {
-                    logging.logToError("JSMon: Failed to fetch counts (HTTP " + response.statusCode() + ")");
+                    logging.logToError("Jsmon: Failed to fetch counts (HTTP " + response.statusCode() + ")");
                 }
                 return counts;
             }
@@ -348,7 +443,7 @@ public class JsmonApiClient {
             
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error fetching counts: " + e.getMessage());
+                logging.logToError("Jsmon: Error fetching counts: " + e.getMessage());
             }
         }
         
@@ -356,7 +451,7 @@ public class JsmonApiClient {
     }
     
     /**
-     * Fetch secrets from JSMon
+     * Fetch secrets from Jsmon
      */
     public String fetchSecrets(String workspaceId, String apiKey, int page) {
         if (workspaceId == null || workspaceId.isEmpty() || apiKey == null || apiKey.isEmpty()) {
@@ -392,7 +487,7 @@ public class JsmonApiClient {
             return all.toString();
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error fetching secrets: " + e.getMessage());
+                logging.logToError("Jsmon: Error fetching secrets: " + e.getMessage());
             }
             return "✗ Error fetching secrets: " + e.getMessage() + "\n";
         }
@@ -405,7 +500,7 @@ public class JsmonApiClient {
         List<JsUrlEntry> entries = new ArrayList<>();
         if (workspaceId == null || workspaceId.isEmpty() || apiKey == null || apiKey.isEmpty()) {
             if (logging != null) {
-                logging.logToError("JSMon: Cannot fetch intelligence data - workspace ID or API key not configured");
+                logging.logToError("Jsmon: Cannot fetch intelligence data - workspace ID or API key not configured");
             }
             return entries;
         }
@@ -424,13 +519,13 @@ public class JsmonApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 401) {
                 if (logging != null) {
-                    logging.logToError("JSMon: Failed to fetch intelligence data (unauthorized)");
+                    logging.logToError("Jsmon: Failed to fetch intelligence data (unauthorized)");
                 }
                 return entries;
             }
             if (response.statusCode() != 200) {
                 if (logging != null) {
-                    logging.logToError("JSMon: Failed to fetch intelligence data (HTTP " + response.statusCode() + ")");
+                    logging.logToError("Jsmon: Failed to fetch intelligence data (HTTP " + response.statusCode() + ")");
                 }
                 return entries;
             }
@@ -441,7 +536,7 @@ public class JsmonApiClient {
             return entries;
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("JSMon: Error fetching intelligence data: " + e.getMessage());
+                logging.logToError("Jsmon: Error fetching intelligence data: " + e.getMessage());
             }
             return entries;
         }
