@@ -26,6 +26,8 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     private JsmonUrlProcessor urlProcessor;
     private Set<String> processedUrls = ConcurrentHashMap.newKeySet();
     private final Object sendLock = new Object();
+    private static final long MIN_SEND_INTERVAL_MS = 200; // 5 requests/second max
+    private long lastSendTimestampMs = 0L;
     private volatile Thread currentScanThread = null;
     
     @Override
@@ -780,6 +782,18 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
 
     private burp.api.JsmonApiClient.SendResult executeSingleSend(java.util.function.Supplier<burp.api.JsmonApiClient.SendResult> sendAction) {
         synchronized (sendLock) {
+            long now = System.currentTimeMillis();
+            long waitMs = MIN_SEND_INTERVAL_MS - (now - lastSendTimestampMs);
+            if (waitMs > 0) {
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new burp.api.JsmonApiClient.SendResult(false, "Send interrupted while rate limiting");
+                }
+            }
+
+            lastSendTimestampMs = System.currentTimeMillis();
             return sendAction.get();
         }
     }
