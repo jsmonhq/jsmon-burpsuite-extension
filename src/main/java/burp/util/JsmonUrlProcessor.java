@@ -64,7 +64,7 @@ public class JsmonUrlProcessor {
         ".jspa", ".tsx", ".jsx", ".xhtml", ".aspx", ".ashx", ".asmx",
         ".asp", ".cfm", ".svc", ".cgi", ".pl",
         ".html", ".htm", ".jsp", ".do", ".php", ".txt",
-        ".xml", ".json", ".bak", ".ts", ".mjs", ".env", ".js"
+        ".xml", ".json", ".bak", ".ts", ".mjs", ".env", ".js", ".map"
     };
     
     /**

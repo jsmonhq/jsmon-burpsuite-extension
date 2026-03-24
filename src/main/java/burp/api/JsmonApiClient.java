@@ -494,7 +494,7 @@ public class JsmonApiClient {
     }
     
     /**
-     * Fetch intelligence data (JS URLs, API paths, URLs, domains, etc.)
+     * Fetch intelligence data (URLs, API paths, domains, etc.)
      */
     public List<JsUrlEntry> fetchIntelligenceData(String workspaceId, String apiKey, String options, int page) {
         List<JsUrlEntry> entries = new ArrayList<>();

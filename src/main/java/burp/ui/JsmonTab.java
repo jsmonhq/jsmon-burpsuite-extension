@@ -1186,12 +1186,12 @@ public class JsmonTab extends JPanel {
         jsIntelligenceSubTabs.setForeground(theme.tabForeground);
         jsIntelligenceSubTabs.setBorder(BorderFactory.createEmptyBorder());
         
-        // Sub-tab 1: JS URLs
+        // Sub-tab 1: URLs
         JPanel jsUrlsPanel = new JPanel(new BorderLayout());
         jsUrlsPanel.setOpaque(false);
-        
-        // Create JS URLs table with URL and timestamp columns
-        String[] jsUrlsColumnNames = {"JS URL", "Scanned At"};
+
+        // Create URLs table with URL and timestamp columns
+        String[] jsUrlsColumnNames = {"URL", "Scanned At"};
         jsUrlsTableModel = new DefaultTableModel(jsUrlsColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -1258,7 +1258,7 @@ public class JsmonTab extends JPanel {
         jsUrlsTable.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
         
         // Set column widths to fill available space
-        jsUrlsTable.getColumnModel().getColumn(0).setPreferredWidth(800); // JS URL (larger)
+        jsUrlsTable.getColumnModel().getColumn(0).setPreferredWidth(800); // URL (larger)
         jsUrlsTable.getColumnModel().getColumn(1).setPreferredWidth(200); // Scanned At
         
         JScrollPane jsUrlsScroll = new JScrollPane(jsUrlsTable);
@@ -1267,7 +1267,7 @@ public class JsmonTab extends JPanel {
         jsUrlsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         jsUrlsScroll.getViewport().setBackground(theme.tableBackground);
         
-        // Pagination and Copy All controls for JS URLs
+        // Pagination and Copy All controls for URLs
         JPanel jsUrlsButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
         jsUrlsButtonPanel.setOpaque(false);
         jsUrlsButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
@@ -1297,11 +1297,11 @@ public class JsmonTab extends JPanel {
             }
         });
         
-        // Copy All button for JS URLs
-        JButton jsUrlsCopyButton = createSecondaryButton("📋 Copy All JS URLs");
-        jsUrlsCopyButton.setToolTipText("Copy all JS URLs to clipboard");
+        // Copy All button for URLs
+        JButton jsUrlsCopyButton = createSecondaryButton("📋 Copy All URLs");
+        jsUrlsCopyButton.setToolTipText("Copy all URLs to clipboard");
         jsUrlsCopyButton.addActionListener(e -> {
-            fetchAllIntelligenceDataAndCopy("jsurls", "JS URL");
+            fetchAllIntelligenceDataAndCopy("jsurls", "URL");
         });
         
         jsUrlsButtonPanel.add(jsUrlsPrevButton);
@@ -1313,7 +1313,7 @@ public class JsmonTab extends JPanel {
         jsUrlsPanel.add(jsUrlsScroll, BorderLayout.CENTER);
         jsUrlsPanel.add(jsUrlsButtonPanel, BorderLayout.SOUTH);
         
-        jsIntelligenceSubTabs.addTab("🔗 JS URLs", jsUrlsPanel);
+        jsIntelligenceSubTabs.addTab("🔗 URLs", jsUrlsPanel);
         
         // Sub-tab 2: API Paths
         JPanel apiPathsPanel = new JPanel(new BorderLayout());
@@ -1521,7 +1521,7 @@ public class JsmonTab extends JPanel {
         // Add listener to fetch data when sub-tabs are selected - always refetch to get latest data
         jsIntelligenceSubTabs.addChangeListener(e -> {
             int selectedIndex = jsIntelligenceSubTabs.getSelectedIndex();
-            if (selectedIndex == 0) { // JS URLs tab
+            if (selectedIndex == 0) { // URLs tab
                 fetchAndDisplayJsUrls(jsUrlsCurrentPage);
             } else if (selectedIndex == 1) { // API Paths tab
                 fetchAndDisplayApiPaths(apiPathsCurrentPage);
@@ -1550,7 +1550,7 @@ public class JsmonTab extends JPanel {
                 // Fetch data for the currently selected sub-tab
                 if (jsIntelligenceSubTabs != null) {
                     int subTabIndex = jsIntelligenceSubTabs.getSelectedIndex();
-                    if (subTabIndex == 0) { // JS URLs
+                    if (subTabIndex == 0) { // URLs
                         fetchAndDisplayJsUrls(jsUrlsCurrentPage);
                     } else if (subTabIndex == 1) { // API Paths
                         fetchAndDisplayApiPaths(apiPathsCurrentPage);
@@ -2860,7 +2860,7 @@ public class JsmonTab extends JPanel {
                     });
                 }
                 
-                // Also fetch JS URLs when secrets are fetched (only on first page)
+                // Also fetch URLs when secrets are fetched (only on first page)
                 if (page == 1) {
                 fetchAndDisplayJsUrls();
                 }
@@ -2982,7 +2982,7 @@ public class JsmonTab extends JPanel {
     }
     
     /**
-     * Fetch and display JS URLs from Jsmon intelligence API
+     * Fetch and display URLs from Jsmon intelligence API
      */
     public void fetchAndDisplayJsUrls() {
         fetchAndDisplayJsUrls(1);
@@ -3004,10 +3004,10 @@ public class JsmonTab extends JPanel {
         Workspace workspace = workspaceMap.get(selectedName);
         String workspaceId = workspace.getId();
         
-        // Fetch JS URLs in background thread
+        // Fetch URLs in background thread
         new Thread(() -> {
             try {
-                appendStatus("Fetching JS URLs (page " + page + ")...");
+                appendStatus("Fetching URLs (page " + page + ")...");
                 List<JsUrlEntry> jsUrlEntries = extension.fetchJsUrls(workspaceId, apiKey, page);
                 
                 if (jsUrlEntries != null && !jsUrlEntries.isEmpty()) {
@@ -3041,7 +3041,7 @@ public class JsmonTab extends JPanel {
                             }
                             
                             jsUrlsCurrentPage = page;
-                            appendStatus("✓ Loaded " + entriesFinal.size() + " JS URL(s) (page " + page + ")");
+                            appendStatus("✓ Loaded " + entriesFinal.size() + " URL(s) (page " + page + ")");
                             
                             // Update page label with total pages
                             updatePageLabel(pageLabel, page, "jsurls");
@@ -3061,7 +3061,7 @@ public class JsmonTab extends JPanel {
                     SwingUtilities.invokeLater(() -> {
                         if (jsUrlsTableModel != null) {
                             jsUrlsTableModel.setRowCount(0);
-                            appendStatus("✓ No JS URLs found (page " + page + ")");
+                            appendStatus("✓ No URLs found (page " + page + ")");
                         }
                         // Update page label even if no data
                         updatePageLabel(pageLabel, page, "jsurls");
@@ -3069,9 +3069,9 @@ public class JsmonTab extends JPanel {
                 }
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() -> {
-                    appendStatus("✗ Error fetching JS URLs: " + e.getMessage());
+                    appendStatus("✗ Error fetching URLs: " + e.getMessage());
                 });
-                logging.logToError("Error fetching JS URLs: " + e.getMessage());
+                logging.logToError("Error fetching URLs: " + e.getMessage());
             }
         }).start();
     }
@@ -3362,7 +3362,7 @@ public class JsmonTab extends JPanel {
                     fieldCounts.getOrDefault("npmconfusion",
                     fieldCounts.getOrDefault("invalidnodemodules", 0)))));
                 
-                jsIntelligenceSubTabs.setTitleAt(0, "🔗 JS URLs (" + jsUrlsCount + ")");
+                jsIntelligenceSubTabs.setTitleAt(0, "🔗 URLs (" + jsUrlsCount + ")");
                 jsIntelligenceSubTabs.setTitleAt(1, "🛣️ API Paths (" + apiPathsCount + ")");
                 jsIntelligenceSubTabs.setTitleAt(2, "🔗 URLs (" + urlsCount + ")");
                 jsIntelligenceSubTabs.setTitleAt(3, "🌐 Domains (" + domainsCount + ")");

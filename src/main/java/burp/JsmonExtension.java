@@ -25,6 +25,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     private JsmonApiClient apiClient;
     private JsmonUrlProcessor urlProcessor;
     private Set<String> processedUrls = ConcurrentHashMap.newKeySet();
+    private final Object sendLock = new Object();
     private volatile Thread currentScanThread = null;
     
     @Override
@@ -121,8 +122,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         
         if (isScannable) {
             // Avoid processing the same URL multiple times
-            if (!processedUrls.contains(url)) {
-                processedUrls.add(url);
+            if (processedUrls.add(url)) {
                 logging.logToOutput("Jsmon: Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
                 
                 // Check if VPN mode is enabled - if so, send response body directly
@@ -168,7 +168,9 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         }
         
         // Execute Jsmon API call with headers
-        burp.api.JsmonApiClient.SendResult result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+        burp.api.JsmonApiClient.SendResult result = executeSingleSend(() ->
+                apiClient.sendToJsmon(url, workspaceId, apiKey, request)
+        );
         
         // Log result to UI
         if (tab != null) {
@@ -217,7 +219,9 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         }
         
         // Execute Jsmon API call with file content (VPN mode)
-        burp.api.JsmonApiClient.SendResult result = apiClient.sendDirectFileScan(url, responseBody, workspaceId, apiKey);
+        burp.api.JsmonApiClient.SendResult result = executeSingleSend(() ->
+                apiClient.sendDirectFileScan(url, responseBody, workspaceId, apiKey)
+        );
         
         // Log result to UI
         if (tab != null) {
@@ -482,8 +486,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                         logging.logToOutput("Jsmon: History scan - Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
                     }
                     
-                    if (isScannable && !scannedUrls.contains(url)) {
-                        scannedUrls.add(url);
+                    if (isScannable && scannedUrls.add(url)) {
                         scannableFiles.add(url);
                         
                         // Store the proxy entry for later use to extract headers if possible
@@ -552,6 +555,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 if (request == null) {
                     request = HttpRequest.httpRequestFromUrl(url);
                 }
+                final HttpRequest requestForSend = request;
                             
                 // Send to Jsmon API and capture result
                 processedUrls.add(url);
@@ -598,7 +602,10 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     }
                     
                     if (responseBody != null && !responseBody.isEmpty()) {
-                        result = apiClient.sendDirectFileScan(url, responseBody, workspaceId, apiKey);
+                        final String responseBodyForSend = responseBody;
+                        result = executeSingleSend(() ->
+                                apiClient.sendDirectFileScan(url, responseBodyForSend, workspaceId, apiKey)
+                        );
                         if (statusCallback != null && result.isSuccess()) {
                             statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] VPN Mode - Sending: " + url);
                         }
@@ -608,7 +615,9 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     }
                 } else {
                     // Normal mode: Send URL only
-                    result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+                    result = executeSingleSend(() ->
+                            apiClient.sendToJsmon(url, workspaceId, apiKey, requestForSend)
+                    );
                 }
                 
                 if (result.isSuccess()) {
@@ -684,16 +693,16 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
 
     /**
-     * Fetch JS URLs from Jsmon intelligence API
+     * Fetch URLs from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
-     * Returns a list of JS URL entries with timestamps
+     * Returns a list of URL entries with timestamps
      */
     public List<JsUrlEntry> fetchJsUrls(String workspaceId, String apiKey, int page) {
         return apiClient.fetchIntelligenceData(workspaceId, apiKey, "jsurls", page);
     }
     
     /**
-     * Fetch JS URLs (backward compatibility - fetches page 1)
+     * Fetch URLs (backward compatibility - fetches page 1)
      */
     public List<JsUrlEntry> fetchJsUrls(String workspaceId, String apiKey) {
         return fetchJsUrls(workspaceId, apiKey, 1);
@@ -767,6 +776,12 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
      */
     public List<JsUrlEntry> fetchInvalidNodeModules(String workspaceId, String apiKey, int page) {
         return apiClient.fetchIntelligenceData(workspaceId, apiKey, "invalidnodemodules", page);
+    }
+
+    private burp.api.JsmonApiClient.SendResult executeSingleSend(java.util.function.Supplier<burp.api.JsmonApiClient.SendResult> sendAction) {
+        synchronized (sendLock) {
+            return sendAction.get();
+        }
     }
 }
 
