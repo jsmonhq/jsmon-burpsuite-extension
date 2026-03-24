@@ -130,7 +130,7 @@ public class JsmonJsonParser {
     }
     
     /**
-     * Extract JS URLs from intelligence API response
+     * Extract URLs from intelligence API response
      */
     public List<JsUrlEntry> extractJsUrlsFromResponse(String json) {
         List<JsUrlEntry> entries = new ArrayList<>();
@@ -212,7 +212,7 @@ public class JsmonJsonParser {
             }
         } catch (Exception e) {
             if (logging != null) {
-                logging.logToError("Jsmon: Error parsing JS URLs from response: " + e.getMessage());
+                logging.logToError("Jsmon: Error parsing URLs from response: " + e.getMessage());
             }
         }
         
