@@ -44,7 +44,7 @@ public class JsmonApiClient {
         
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(URI.create(API_BASE_URL + "/getWorkspaces"))
+                    .uri(URI.create(API_BASE_URL + "/listWorkspaces?limit=100"))
                     .header("X-Jsmon-Key", apiKey.trim())
                     .GET()
                     .build();
