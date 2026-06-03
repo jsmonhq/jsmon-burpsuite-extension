@@ -1,0 +1,31 @@
+# JSMon Ignore File
+# Files and patterns listed here will be skipped during JSMon scans
+# Uses glob-like patterns (one per line)
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# Node modules
+node_modules
+
+# Git
+.git
+
+# Build output
+dist
+build
+out
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE / editor config
+.vscode
+.idea

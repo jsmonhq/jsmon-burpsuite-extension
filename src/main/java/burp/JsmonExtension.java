@@ -25,6 +25,9 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     private JsmonApiClient apiClient;
     private JsmonUrlProcessor urlProcessor;
     private Set<String> processedUrls = ConcurrentHashMap.newKeySet();
+    private final Object sendLock = new Object();
+    private static final long MIN_SEND_INTERVAL_MS = 200; // 5 requests/second max
+    private long lastSendTimestampMs = 0L;
     private volatile Thread currentScanThread = null;
     
     @Override
@@ -36,7 +39,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         this.urlProcessor = new JsmonUrlProcessor(logging);
         
         // Set extension name
-        api.extension().setName("JSMon Extension");
+        api.extension().setName("Jsmon Extension");
         
         // Register HTTP handler
         api.http().registerHttpHandler(this);
@@ -48,7 +51,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         
         // Create UI tab
         this.tab = new JsmonTab(api, this);
-        api.userInterface().registerSuiteTab("JSMon", tab);
+        api.userInterface().registerSuiteTab("Jsmon", tab);
     }
     
     
@@ -109,23 +112,35 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         }
         
         if (logging != null && contentType != null) {
-            logging.logToOutput("JSMon: Extracted Content-Type header for '" + url + "': " + contentType);
+            logging.logToOutput("Jsmon: Extracted Content-Type header for '" + url + "': " + contentType);
         }
         
         // Check if it's a scannable file (check URL extension and Content-Type)
         // Use Content-Type string to avoid duplicate extraction (we already have it)
         boolean isScannable = urlProcessor.isScannableFile(url, contentType);
         if (logging != null) {
-            logging.logToOutput("JSMon: Scannable check for '" + url + "' (Content-Type: " + (contentType != null ? contentType : "null") + "): " + isScannable);
+            logging.logToOutput("Jsmon: Scannable check for '" + url + "' (Content-Type: " + (contentType != null ? contentType : "null") + "): " + isScannable);
         }
         
         if (isScannable) {
             // Avoid processing the same URL multiple times
-            if (!processedUrls.contains(url)) {
-                processedUrls.add(url);
-                logging.logToOutput("JSMon: Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
-                // Process new scannable files as they come in (only need request headers and URL)
-                processScannableFile(httpRequest);
+            if (processedUrls.add(url)) {
+                logging.logToOutput("Jsmon: Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
+                
+                // Check if VPN mode is enabled - if so, send response body directly
+                if (config.isVpnMode()) {
+                    // Extract response body for VPN mode
+                    String responseBody = null;
+                    try {
+                        responseBody = response.bodyToString();
+                    } catch (Exception e) {
+                        logging.logToError("Jsmon: VPN Mode - Error extracting response body: " + e.getMessage());
+                    }
+                    processScannableFileVpnMode(httpRequest, responseBody);
+                } else {
+                    // Process new scannable files as they come in (only need request headers and URL)
+                    processScannableFile(httpRequest);
+                }
             }
         }
         
@@ -142,7 +157,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         String workspaceId = config.getWorkspaceId();
         
         if (apiKey == null || apiKey.isEmpty() || workspaceId == null || workspaceId.isEmpty()) {
-            logging.logToOutput("JSMon: Skipping file - API key or workspace ID not configured");
+            logging.logToOutput("Jsmon: Skipping file - API key or workspace ID not configured");
             return;
         }
         
@@ -154,8 +169,10 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             tab.appendStatusMessage("🔄 Auto-scanning: " + url);
         }
         
-        // Execute JSMon API call with headers
-        burp.api.JsmonApiClient.SendResult result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+        // Execute Jsmon API call with headers
+        burp.api.JsmonApiClient.SendResult result = executeSingleSend(() ->
+                apiClient.sendToJsmon(url, workspaceId, apiKey, request)
+        );
         
         // Log result to UI
         if (tab != null) {
@@ -171,6 +188,57 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     tab.appendStatusMessage("  ✗ Failed: " + url + " - " + errorMsg);
             } else {
                 tab.appendStatusMessage("  ✗ Failed: " + url);
+                }
+            }
+        }
+    }
+    
+    private void processScannableFileVpnMode(HttpRequest request, String responseBody) {
+        // Check if automatic scanning is still enabled before processing
+        if (!config.isAutomateScan()) {
+            return;
+        }
+        
+        String apiKey = config.getApiKey();
+        String workspaceId = config.getWorkspaceId();
+        
+        if (apiKey == null || apiKey.isEmpty() || workspaceId == null || workspaceId.isEmpty()) {
+            logging.logToOutput("Jsmon: VPN Mode - Skipping file - API key or workspace ID not configured");
+            return;
+        }
+        
+        if (responseBody == null || responseBody.isEmpty()) {
+            logging.logToOutput("Jsmon: VPN Mode - Skipping file - Response body is empty");
+            return;
+        }
+        
+        // Get full URL including path (not just endpoint) for extension matching
+        String url = request.url().toString();
+        
+        // Log to UI if tab is available
+        if (tab != null) {
+            tab.appendStatusMessage("🔄 VPN Mode - Auto-scanning: " + url);
+        }
+        
+        // Execute Jsmon API call with file content (VPN mode)
+        burp.api.JsmonApiClient.SendResult result = executeSingleSend(() ->
+                apiClient.sendDirectFileScan(url, responseBody, workspaceId, apiKey)
+        );
+        
+        // Log result to UI
+        if (tab != null) {
+            if (result.isSuccess()) {
+                tab.appendStatusMessage("  ✓ VPN Mode - Success: " + url);
+                // Fetch secrets after successful scan
+                tab.fetchAndDisplaySecrets();
+                // Refresh user profile to update JSScan credits
+                tab.fetchAndDisplayUserProfile();
+            } else {
+                String errorMsg = result.getErrorMessage();
+                if (errorMsg != null && !errorMsg.isEmpty()) {
+                    tab.appendStatusMessage("  ✗ VPN Mode - Failed: " + url + " - " + errorMsg);
+                } else {
+                    tab.appendStatusMessage("  ✗ VPN Mode - Failed: " + url);
                 }
             }
         }
@@ -209,7 +277,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         if (wasEnabled && !automateScan) {
             if (currentScanThread != null && currentScanThread.isAlive()) {
                 currentScanThread.interrupt();
-                logging.logToOutput("JSMon: Automatic scanning disabled - stopping current scan");
+                logging.logToOutput("Jsmon: Automatic scanning disabled - stopping current scan");
             }
         }
     }
@@ -224,6 +292,14 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     
     public boolean isAutomateScan() {
         return config.isAutomateScan();
+    }
+    
+    public boolean isVpnMode() {
+        return config.isVpnMode();
+    }
+    
+    public void setVpnMode(boolean vpnMode) {
+        config.setVpnMode(vpnMode);
     }
     
     /**
@@ -254,7 +330,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                         tab.appendStatusMessage("  No domain scope - scanning all scannable files");
                     }
                 }
-                logging.logToOutput("JSMon: Automatic scanning enabled - scanning existing files in history...");
+                logging.logToOutput("Jsmon: Automatic scanning enabled - scanning existing files in history...");
                 
                 // Pass callback to update UI in real-time
                 int count = scanHttpHistory((statusMessage) -> {
@@ -263,7 +339,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                         if (tab != null) {
                             tab.appendStatusMessage("  ⚠ Scan stopped - automatic scanning was disabled");
                         }
-                        logging.logToOutput("JSMon: Scan stopped - automatic scanning was disabled");
+                        logging.logToOutput("Jsmon: Scan stopped - automatic scanning was disabled");
                         return;
                     }
                     if (tab != null) {
@@ -277,7 +353,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                         tab.appendStatusMessage("✓ Automatic scanning initialized - " + count + " existing file(s) processed");
                         // Note: Secrets are automatically fetched by scanHttpHistory if at least one scan was attempted (success or failure)
                     }
-                    logging.logToOutput("JSMon: Automatic scanning initialized - " + count + " existing file(s) processed");
+                    logging.logToOutput("Jsmon: Automatic scanning initialized - " + count + " existing file(s) processed");
                 }
             });
             scanThread.setDaemon(true);
@@ -312,7 +388,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
         String scopedDomain = config.getScopedDomain();
         
         if (apiKey == null || apiKey.isEmpty() || workspaceId == null || workspaceId.isEmpty()) {
-            logging.logToOutput("JSMon: Cannot scan - API key or workspace ID not configured");
+            logging.logToOutput("Jsmon: Cannot scan - API key or workspace ID not configured");
             if (statusCallback != null) {
                 statusCallback.accept("✗ Cannot scan - API key or workspace ID not configured");
             }
@@ -409,18 +485,17 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     boolean isScannable = urlProcessor.isScannableFile(url, contentType);
                     
                     if (logging != null && isScannable) {
-                        logging.logToOutput("JSMon: History scan - Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
+                        logging.logToOutput("Jsmon: History scan - Detected scannable file: " + url + (contentType != null ? " (Content-Type: " + contentType + ")" : ""));
                     }
                     
-                    if (isScannable && !scannedUrls.contains(url)) {
-                        scannedUrls.add(url);
+                    if (isScannable && scannedUrls.add(url)) {
                         scannableFiles.add(url);
                         
                         // Store the proxy entry for later use to extract headers if possible
                         urlToProxyEntryMap.put(url, proxyEntry);
                     }
                 } catch (Exception e) {
-                    logging.logToError("JSMon: Error processing entry: " + e.getMessage());
+                    logging.logToError("Jsmon: Error processing entry: " + e.getMessage());
                     continue;
                 }
             }
@@ -429,14 +504,14 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 if (statusCallback != null) {
                     statusCallback.accept("✗ No scannable files found to scan");
                 }
-                logging.logToOutput("JSMon: No scannable files found to scan");
+                logging.logToOutput("Jsmon: No scannable files found to scan");
                 return 0;
             }
             
             if (statusCallback != null) {
                 statusCallback.accept("Found " + scannableFiles.size() + " file(s) to scan");
             }
-            logging.logToOutput("JSMon: Found " + scannableFiles.size() + " file(s) to scan");
+            logging.logToOutput("Jsmon: Found " + scannableFiles.size() + " file(s) to scan");
             
             // Second pass: scan each file sequentially with real-time updates
             for (int i = 0; i < scannableFiles.size(); i++) {
@@ -445,7 +520,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     if (statusCallback != null) {
                         statusCallback.accept("⚠ Scan stopped by user");
                     }
-                    logging.logToOutput("JSMon: Scan stopped - automatic scanning disabled or interrupted");
+                    logging.logToOutput("Jsmon: Scan stopped - automatic scanning disabled or interrupted");
                     break;
                 }
                 
@@ -456,7 +531,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 if (statusCallback != null) {
                     statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] Scanning: " + url);
                 }
-                logging.logToOutput("JSMon: [" + fileNum + "/" + scannableFiles.size() + "] Scanning: " + url);
+                logging.logToOutput("Jsmon: [" + fileNum + "/" + scannableFiles.size() + "] Scanning: " + url);
                 
                 // Get request headers from proxy entry (avoid fetching full request body)
                 burp.api.montoya.proxy.ProxyHttpRequestResponse proxyEntry = urlToProxyEntryMap.get(url);
@@ -482,33 +557,94 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 if (request == null) {
                     request = HttpRequest.httpRequestFromUrl(url);
                 }
+                final HttpRequest requestForSend = request;
                             
-                // Send to JSMon API and capture result (only headers are extracted, not full request body)
+                // Send to Jsmon API and capture result
                 processedUrls.add(url);
                 
-                burp.api.JsmonApiClient.SendResult result = apiClient.sendToJsmon(url, workspaceId, apiKey, request);
+                burp.api.JsmonApiClient.SendResult result;
+                
+                // Check if VPN mode is enabled
+                if (config.isVpnMode()) {
+                    // VPN Mode: Extract response body and send directly
+                    String responseBody = null;
+                    if (proxyEntry != null) {
+                        try {
+                            // Try to get response from proxy entry using reflection (consistent with existing code)
+                            Object responseObj = null;
+                            try {
+                                java.lang.reflect.Method responseMethod = proxyEntry.getClass().getMethod("httpResponse");
+                                responseObj = responseMethod.invoke(proxyEntry);
+                            } catch (Exception ex1) {
+                                try {
+                                    java.lang.reflect.Method responseMethod = proxyEntry.getClass().getMethod("response");
+                                    responseObj = responseMethod.invoke(proxyEntry);
+                                } catch (Exception ex2) {
+                                    // Will be null
+                                }
+                            }
+                            
+                            if (responseObj != null) {
+                                // Try bodyToString() method
+                                try {
+                                    java.lang.reflect.Method bodyMethod = responseObj.getClass().getMethod("bodyToString");
+                                    responseBody = (String) bodyMethod.invoke(responseObj);
+                                    logging.logToOutput("Jsmon: VPN Mode - Extracted response body (" + (responseBody != null ? responseBody.length() : 0) + " chars) for: " + url);
+                                } catch (Exception bodyEx) {
+                                    logging.logToError("Jsmon: VPN Mode - bodyToString() failed for: " + url + " - " + bodyEx.getMessage());
+                                }
+                            } else {
+                                logging.logToOutput("Jsmon: VPN Mode - Response object is null for: " + url);
+                            }
+                        } catch (Exception e) {
+                            logging.logToError("Jsmon: VPN Mode - Could not extract response body for: " + url + " - " + e.getMessage());
+                        }
+                    } else {
+                        logging.logToOutput("Jsmon: VPN Mode - proxyEntry is null for: " + url);
+                    }
+                    
+                    if (responseBody != null && !responseBody.isEmpty()) {
+                        final String responseBodyForSend = responseBody;
+                        result = executeSingleSend(() ->
+                                apiClient.sendDirectFileScan(url, responseBodyForSend, workspaceId, apiKey)
+                        );
+                        if (statusCallback != null && result.isSuccess()) {
+                            statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] VPN Mode - Sending: " + url);
+                        }
+                    } else {
+                        logging.logToOutput("Jsmon: VPN Mode - Skipping (no response body): " + url);
+                        result = new burp.api.JsmonApiClient.SendResult(false, "No response body available");
+                    }
+                } else {
+                    // Normal mode: Send URL only
+                    result = executeSingleSend(() ->
+                            apiClient.sendToJsmon(url, workspaceId, apiKey, requestForSend)
+                    );
+                }
                 
                 if (result.isSuccess()) {
                     scannedCount++;
+                    String modePrefix = config.isVpnMode() ? "VPN Mode - " : "";
                     if (statusCallback != null) {
-                        statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] ✓ Success: " + url);
+                        statusCallback.accept("[" + fileNum + "/" + scannableFiles.size() + "] ✓ " + modePrefix + "Success: " + url);
                     }
-                    logging.logToOutput("JSMon: [" + fileNum + "/" + scannableFiles.size() + "] ✓ Successfully scanned: " + url);
+                    logging.logToOutput("Jsmon: [" + fileNum + "/" + scannableFiles.size() + "] ✓ " + modePrefix + "Successfully scanned: " + url);
                     // Refresh user profile to update JSScan credits after each successful scan
                     if (tab != null) {
                         tab.fetchAndDisplayUserProfile();
                     }
                 } else {
                     failedCount++;
+                    String modePrefix = config.isVpnMode() ? "VPN Mode - " : "";
                     String errorMsg = result.getErrorMessage();
-                    String failureMessage = "[" + fileNum + "/" + scannableFiles.size() + "] ✗ Failed: " + url;
+                    String failureMessage = "[" + fileNum + "/" + scannableFiles.size() + "] ✗ " + modePrefix + "Failed: " + url;
                     if (errorMsg != null && !errorMsg.isEmpty()) {
                         failureMessage += " - " + errorMsg;
                     }
                     if (statusCallback != null) {
                         statusCallback.accept(failureMessage);
                     }
-                    logging.logToError("JSMon: " + failureMessage);
+                    logging.logToError("Jsmon: " + failureMessage);
                 }
             }
             
@@ -517,7 +653,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             if (statusCallback != null) {
                 statusCallback.accept("✓ " + summary);
             }
-            logging.logToOutput("JSMon: Manual scan completed. " + summary);
+            logging.logToOutput("Jsmon: Manual scan completed. " + summary);
             
             // Fetch secrets after scan completes if at least one scan was attempted (success or failure)
             if ((scannedCount > 0 || failedCount > 0) && tab != null) {
@@ -525,7 +661,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
             }
             
         } catch (Exception e) {
-            logging.logToError("JSMon: Error scanning HTTP history: " + e.getMessage());
+            logging.logToError("Jsmon: Error scanning HTTP history: " + e.getMessage());
             e.printStackTrace();
             if (statusCallback != null) {
                 statusCallback.accept("✗ Error: " + e.getMessage());
@@ -544,7 +680,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch secrets from JSMon using the REST API (keysAndSecrets endpoint)
+     * Fetch secrets from Jsmon using the REST API (keysAndSecrets endpoint)
      * @param page Page number to fetch (1-based)
      */
     public String fetchSecrets(String workspaceId, String apiKey, int page) {
@@ -552,30 +688,30 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch secrets from JSMon (backward compatibility - fetches page 1)
+     * Fetch secrets from Jsmon (backward compatibility - fetches page 1)
      */
     public String fetchSecrets(String workspaceId, String apiKey) {
         return fetchSecrets(workspaceId, apiKey, 1);
     }
 
     /**
-     * Fetch JS URLs from JSMon intelligence API
+     * Fetch URLs from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
-     * Returns a list of JS URL entries with timestamps
+     * Returns a list of URL entries with timestamps
      */
     public List<JsUrlEntry> fetchJsUrls(String workspaceId, String apiKey, int page) {
         return apiClient.fetchIntelligenceData(workspaceId, apiKey, "jsurls", page);
     }
     
     /**
-     * Fetch JS URLs (backward compatibility - fetches page 1)
+     * Fetch URLs (backward compatibility - fetches page 1)
      */
     public List<JsUrlEntry> fetchJsUrls(String workspaceId, String apiKey) {
         return fetchJsUrls(workspaceId, apiKey, 1);
     }
     
     /**
-     * Fetch API paths from JSMon intelligence API
+     * Fetch API paths from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of API path entries with timestamps
      */
@@ -591,7 +727,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch URLs from JSMon intelligence API
+     * Fetch URLs from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of URL entries with timestamps
      */
@@ -600,7 +736,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch Domains from JSMon intelligence API
+     * Fetch Domains from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of domain entries with timestamps
      */
@@ -609,7 +745,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch IP addresses from JSMon intelligence API
+     * Fetch IP addresses from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of IP address entries with timestamps
      */
@@ -618,7 +754,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch Emails from JSMon intelligence API
+     * Fetch Emails from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of email entries with timestamps
      */
@@ -627,7 +763,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch S3 buckets from JSMon intelligence API
+     * Fetch S3 buckets from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of S3 bucket entries with timestamps
      */
@@ -636,12 +772,30 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
     }
     
     /**
-     * Fetch Invalid Node Modules from JSMon intelligence API
+     * Fetch Invalid Node Modules from Jsmon intelligence API
      * @param page Page number to fetch (1-based)
      * Returns a list of invalid node module entries with timestamps
      */
     public List<JsUrlEntry> fetchInvalidNodeModules(String workspaceId, String apiKey, int page) {
         return apiClient.fetchIntelligenceData(workspaceId, apiKey, "invalidnodemodules", page);
+    }
+
+    private burp.api.JsmonApiClient.SendResult executeSingleSend(java.util.function.Supplier<burp.api.JsmonApiClient.SendResult> sendAction) {
+        synchronized (sendLock) {
+            long now = System.currentTimeMillis();
+            long waitMs = MIN_SEND_INTERVAL_MS - (now - lastSendTimestampMs);
+            if (waitMs > 0) {
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new burp.api.JsmonApiClient.SendResult(false, "Send interrupted while rate limiting");
+                }
+            }
+
+            lastSendTimestampMs = System.currentTimeMillis();
+            return sendAction.get();
+        }
     }
 }
 

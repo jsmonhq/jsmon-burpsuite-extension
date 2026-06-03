@@ -9,6 +9,7 @@ public class JsmonConfig {
     private static final String SCOPED_DOMAIN_KEY = "scopedDomain";
     private static final String AUTOMATE_SCAN_KEY = "automateScan";
     private static final String GITHUB_TOKEN_KEY = "githubToken";
+    private static final String VPN_MODE_KEY = "vpnMode";
     
     private MontoyaApi api;
     private PersistedObject persistedObject;
@@ -18,12 +19,13 @@ public class JsmonConfig {
     private String scopedDomain;
     private boolean automateScan = false; // Default to false - automatic scanning is off by default
     private String githubToken;
+    private boolean vpnMode = false; // Default to false - VPN mode sends response body directly
     
     public JsmonConfig(MontoyaApi api) {
         this.api = api;
         if (api != null) {
             // extensionData() stores data in the project file, making it project-specific
-            // Each Burp Suite project will have its own separate JSMon configuration
+            // Each Burp Suite project will have its own separate Jsmon configuration
             // Note: Project must be saved to disk (not temporary) for persistence to work
             this.persistedObject = api.persistence().extensionData();
             loadFromPersistence();
@@ -33,7 +35,7 @@ public class JsmonConfig {
     private void loadFromPersistence() {
         if (persistedObject == null) {
             if (api != null && api.logging() != null) {
-                api.logging().logToOutput("JSMon: Persistence object is null - using default configuration");
+                api.logging().logToOutput("Jsmon: Persistence object is null - using default configuration");
             }
             return;
         }
@@ -46,6 +48,7 @@ public class JsmonConfig {
             String loadedScopedDomain = persistedObject.getString(SCOPED_DOMAIN_KEY);
             Boolean loadedAutomateScan = persistedObject.getBoolean(AUTOMATE_SCAN_KEY);
             String loadedGithubToken = persistedObject.getString(GITHUB_TOKEN_KEY);
+            Boolean loadedVpnMode = persistedObject.getBoolean(VPN_MODE_KEY);
             
             // Only assign if values were actually loaded (not null for strings, not false for boolean if it was set)
             if (loadedApiKey != null) {
@@ -63,15 +66,18 @@ public class JsmonConfig {
             if (loadedGithubToken != null) {
                 this.githubToken = loadedGithubToken;
             }
+            if (loadedVpnMode != null) {
+                this.vpnMode = loadedVpnMode;
+            }
             
             // Log successful load for debugging
             if (api != null && api.logging() != null) {
                 if (apiKey != null || workspaceId != null) {
-                    api.logging().logToOutput("JSMon: Loaded saved configuration from project data (API key: " + 
+                    api.logging().logToOutput("Jsmon: Loaded saved configuration from project data (API key: " + 
                         (apiKey != null ? "present" : "not set") + ", Workspace: " + 
                         (workspaceId != null ? "present" : "not set") + ")");
                 } else {
-                    api.logging().logToOutput("JSMon: No saved configuration found in project data");
+                    api.logging().logToOutput("Jsmon: No saved configuration found in project data");
                 }
             }
         } catch (Exception e) {
@@ -80,8 +86,9 @@ public class JsmonConfig {
             this.workspaceId = null;
             this.scopedDomain = null;
             this.automateScan = false;
+            this.vpnMode = false;
             if (api != null && api.logging() != null) {
-                api.logging().logToError("JSMon: Error loading configuration: " + e.getMessage());
+                api.logging().logToError("Jsmon: Error loading configuration: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -90,7 +97,7 @@ public class JsmonConfig {
     private void saveToPersistence() {
         if (persistedObject == null) {
             if (api != null && api.logging() != null) {
-                api.logging().logToError("JSMon: Cannot save configuration - persistence object is null. " +
+                api.logging().logToError("Jsmon: Cannot save configuration - persistence object is null. " +
                     "Make sure you're using a disk-based project (not temporary project).");
             }
             return;
@@ -129,6 +136,7 @@ public class JsmonConfig {
             }
             
             persistedObject.setBoolean(AUTOMATE_SCAN_KEY, automateScan);
+            persistedObject.setBoolean(VPN_MODE_KEY, vpnMode);
             
             if (githubToken != null && !githubToken.isEmpty()) {
                 persistedObject.setString(GITHUB_TOKEN_KEY, githubToken);
@@ -142,14 +150,14 @@ public class JsmonConfig {
             
             // Log successful save for debugging
             if (api != null && api.logging() != null) {
-                api.logging().logToOutput("JSMon: Configuration saved to project data (API key: " + 
+                api.logging().logToOutput("Jsmon: Configuration saved to project data (API key: " + 
                     (apiKey != null && !apiKey.isEmpty() ? "saved" : "cleared") + ", Workspace: " + 
                     (workspaceId != null && !workspaceId.isEmpty() ? "saved" : "cleared") + ")");
             }
         } catch (Exception e) {
             // If saving fails, log the error
             if (api != null && api.logging() != null) {
-                api.logging().logToError("JSMon: Error saving configuration: " + e.getMessage());
+                api.logging().logToError("Jsmon: Error saving configuration: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -197,6 +205,15 @@ public class JsmonConfig {
     
     public void setGithubToken(String githubToken) {
         this.githubToken = githubToken;
+        saveToPersistence();
+    }
+    
+    public boolean isVpnMode() {
+        return vpnMode;
+    }
+    
+    public void setVpnMode(boolean vpnMode) {
+        this.vpnMode = vpnMode;
         saveToPersistence();
     }
 }

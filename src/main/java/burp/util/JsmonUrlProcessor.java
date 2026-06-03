@@ -64,7 +64,7 @@ public class JsmonUrlProcessor {
         ".jspa", ".tsx", ".jsx", ".xhtml", ".aspx", ".ashx", ".asmx",
         ".asp", ".cfm", ".svc", ".cgi", ".pl",
         ".html", ".htm", ".jsp", ".do", ".php", ".txt",
-        ".xml", ".json", ".bak", ".ts", ".mjs", ".env", ".js"
+        ".xml", ".json", ".bak", ".ts", ".mjs", ".env", ".js", ".map"
     };
     
     /**
@@ -143,7 +143,7 @@ public class JsmonUrlProcessor {
         // Check URL extension for all supported file types
         boolean hasExtension = hasScannableExtension(url);
         if (logging != null) {
-            logging.logToOutput("JSMon: URL extension check for '" + url + "': " + hasExtension);
+            logging.logToOutput("Jsmon: URL extension check for '" + url + "': " + hasExtension);
         }
         
         if (hasExtension) {
@@ -152,11 +152,11 @@ public class JsmonUrlProcessor {
         
         // If no extension match, check Content-Type header for scannable content types
         if (logging != null) {
-            logging.logToOutput("JSMon: No extension match, checking Content-Type: " + (contentType != null ? contentType : "null"));
+            logging.logToOutput("Jsmon: No extension match, checking Content-Type: " + (contentType != null ? contentType : "null"));
         }
         boolean contentTypeMatch = isScannableByContentType(contentType);
         if (logging != null) {
-            logging.logToOutput("JSMon: Content-Type check result: " + contentTypeMatch);
+            logging.logToOutput("Jsmon: Content-Type check result: " + contentTypeMatch);
         }
         return contentTypeMatch;
     }
@@ -174,17 +174,17 @@ public class JsmonUrlProcessor {
                 // Check both the full Content-Type and the base (without parameters)
                 if (contentTypeLower.contains(scannableType) || contentTypeBase.contains(scannableType)) {
                     if (logging != null) {
-                        logging.logToOutput("JSMon: Content-Type match - '" + contentType + "' contains '" + scannableType + "'");
+                        logging.logToOutput("Jsmon: Content-Type match - '" + contentType + "' contains '" + scannableType + "'");
                     }
                     return true;
                 }
             }
             if (logging != null) {
-                logging.logToOutput("JSMon: Content-Type '" + contentType + "' (base: '" + contentTypeBase + "') did not match any scannable types");
+                logging.logToOutput("Jsmon: Content-Type '" + contentType + "' (base: '" + contentTypeBase + "') did not match any scannable types");
             }
         } else {
             if (logging != null) {
-                logging.logToOutput("JSMon: Content-Type is null or empty");
+                logging.logToOutput("Jsmon: Content-Type is null or empty");
             }
         }
         return false;
