@@ -44,7 +44,7 @@ public class JsmonApiClient {
         
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(URI.create(API_BASE_URL + "/getWorkspaces"))
+                    .uri(URI.create(API_BASE_URL + "/listWorkspaces?limit=100"))
                     .header("X-Jsmon-Key", apiKey.trim())
                     .GET()
                     .build();
@@ -52,7 +52,7 @@ public class JsmonApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 if (logging != null) {
-                    logging.logToError("JSMon: getWorkspaces failed (HTTP " + response.statusCode() + ")");
+                    logging.logToError("JSMon: listWorkspaces failed (HTTP " + response.statusCode() + ")");
                 }
                 return new ArrayList<>();
             }

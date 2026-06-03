@@ -27,12 +27,13 @@ public class JsmonJsonParser {
             return workspaces;
         }
 
-        int arrayStart = json.indexOf("[");
-        int arrayEnd = json.lastIndexOf("]");
-        if (arrayStart == -1 || arrayEnd == -1 || arrayEnd <= arrayStart) {
+        String arrayContent = extractJsonArrayContent(json, "\"workspaces\"");
+        if (arrayContent == null) {
+            arrayContent = extractJsonArrayContent(json, null);
+        }
+        if (arrayContent == null) {
             return workspaces;
         }
-        String arrayContent = json.substring(arrayStart + 1, arrayEnd);
 
         List<String> objects = splitJsonObjects(arrayContent);
         for (String obj : objects) {
@@ -43,6 +44,24 @@ public class JsmonJsonParser {
             }
         }
         return workspaces;
+    }
+
+    private String extractJsonArrayContent(String json, String fieldName) {
+        int searchFrom = 0;
+        if (fieldName != null) {
+            int fieldIndex = json.indexOf(fieldName);
+            if (fieldIndex == -1) {
+                return null;
+            }
+            searchFrom = fieldIndex;
+        }
+
+        int arrayStart = json.indexOf("[", searchFrom);
+        int arrayEnd = json.lastIndexOf("]");
+        if (arrayStart == -1 || arrayEnd == -1 || arrayEnd <= arrayStart) {
+            return null;
+        }
+        return json.substring(arrayStart + 1, arrayEnd);
     }
     
     /**
@@ -68,10 +87,25 @@ public class JsmonJsonParser {
     public String extractJsScanCredits(String json) {
         if (json == null) return null;
         try {
-            Pattern p = Pattern.compile("\"JsScan\"\\s*:\\s*(\\d+)");
-            Matcher m = p.matcher(json);
-            if (m.find()) {
-                return m.group(1);
+            Pattern remainingPattern = Pattern.compile(
+                "\"jsScan\"\\s*:\\s*\\{[^}]*\"remaining\"\\s*:\\s*(\\d+)"
+            );
+            Matcher remainingMatcher = remainingPattern.matcher(json);
+            if (remainingMatcher.find()) {
+                int remaining = Integer.parseInt(remainingMatcher.group(1));
+                int addOn = 0;
+                Pattern addOnPattern = Pattern.compile("\"addOnLimits\"\\s*:\\s*\\{[^}]*\"JsScan\"\\s*:\\s*(\\d+)");
+                Matcher addOnMatcher = addOnPattern.matcher(json);
+                if (addOnMatcher.find()) {
+                    addOn = Integer.parseInt(addOnMatcher.group(1));
+                }
+                return String.valueOf(remaining + addOn);
+            }
+
+            Pattern legacyPattern = Pattern.compile("\"JsScan\"\\s*:\\s*(\\d+)");
+            Matcher legacyMatcher = legacyPattern.matcher(json);
+            if (legacyMatcher.find()) {
+                return legacyMatcher.group(1);
             }
         } catch (Exception ignored) {
         }
