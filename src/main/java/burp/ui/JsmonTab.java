@@ -603,7 +603,7 @@ public class JsmonTab extends JPanel {
         creditsBadgeLabel = createCreditsBadge("— scans left");
         refreshCreditsButton = createSecondaryButton("↻ Refresh");
         refreshCreditsButton.setPreferredSize(new Dimension(88, 28));
-        refreshCreditsButton.setToolTipText("Refresh JSScan credits");
+        refreshCreditsButton.setToolTipText("Refresh scan credits");
         refreshCreditsButton.addActionListener(e -> fetchAndDisplayUserProfile(true));
 
         JPanel creditsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
@@ -801,7 +801,7 @@ public class JsmonTab extends JPanel {
         userContent.add(Box.createVerticalStrut(6));
         userContent.add(createKeyValueRow("Email", userEmailValue));
         userContent.add(Box.createVerticalStrut(6));
-        userContent.add(createKeyValueRow("JSScan credits", userLimitsValue));
+        userContent.add(createKeyValueRow("Scan credits", userLimitsValue));
 
         userCard.add(userContent, BorderLayout.CENTER);
         mainContainer.add(userCard);
