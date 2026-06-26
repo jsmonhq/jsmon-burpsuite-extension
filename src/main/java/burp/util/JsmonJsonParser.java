@@ -82,30 +82,112 @@ public class JsmonJsonParser {
     }
     
     /**
-     * Extract JsScan credits from profile response
+     * Structured JsScan limits parsed from viewProfile (aligned with Chrome/Firefox extensions).
      */
-    public String extractJsScanCredits(String json) {
-        if (json == null) return null;
+    public static final class JsScanLimits {
+        public int remaining = -1;
+        public int total = -1;
+        public int addOn = 0;
+    }
+
+    /**
+     * Extract JsScan credits from profile response.
+     * Handles data.apiCallLimits.jsScan object/scalar plus data.addOnLimits.JsScan.
+     */
+    public JsScanLimits extractJsScanLimits(String json) {
+        JsScanLimits limits = new JsScanLimits();
+        if (json == null || json.isEmpty()) {
+            return limits;
+        }
+
         try {
-            Pattern remainingPattern = Pattern.compile(
-                "\"jsScan\"\\s*:\\s*\\{[^}]*\"remaining\"\\s*:\\s*(\\d+)"
-            );
-            Matcher remainingMatcher = remainingPattern.matcher(json);
-            if (remainingMatcher.find()) {
-                int remaining = Integer.parseInt(remainingMatcher.group(1));
-                int addOn = 0;
-                Pattern addOnPattern = Pattern.compile("\"addOnLimits\"\\s*:\\s*\\{[^}]*\"JsScan\"\\s*:\\s*(\\d+)");
-                Matcher addOnMatcher = addOnPattern.matcher(json);
-                if (addOnMatcher.find()) {
-                    addOn = Integer.parseInt(addOnMatcher.group(1));
+            String apiBlock = extractJsonObjectBlock(json, "apiCallLimits");
+            String searchIn = apiBlock != null ? apiBlock : json;
+
+            String jsScanBlock = extractJsonObjectBlock(searchIn, "jsScan");
+            if (jsScanBlock != null) {
+                Integer rem = extractJsonIntField(jsScanBlock, "remaining");
+                Integer tot = extractJsonIntField(jsScanBlock, "total");
+                if (rem != null) {
+                    limits.remaining = rem;
                 }
-                return String.valueOf(remaining + addOn);
+                if (tot != null) {
+                    limits.total = tot;
+                }
+            } else {
+                Integer flatJsScan = extractJsonIntField(searchIn, "JsScan");
+                if (flatJsScan == null) {
+                    flatJsScan = extractJsonIntField(searchIn, "jsScan");
+                }
+                if (flatJsScan != null) {
+                    limits.remaining = flatJsScan;
+                }
             }
 
-            Pattern legacyPattern = Pattern.compile("\"JsScan\"\\s*:\\s*(\\d+)");
-            Matcher legacyMatcher = legacyPattern.matcher(json);
-            if (legacyMatcher.find()) {
-                return legacyMatcher.group(1);
+            String addOnBlock = extractJsonObjectBlock(json, "addOnLimits");
+            if (addOnBlock != null) {
+                Integer addOn = extractJsonIntField(addOnBlock, "JsScan");
+                if (addOn == null) {
+                    addOn = extractJsonIntField(addOnBlock, "jsScan");
+                }
+                if (addOn != null) {
+                    limits.addOn = addOn;
+                }
+            }
+        } catch (Exception e) {
+            if (logging != null) {
+                logging.logToError("Jsmon: Error parsing JsScan limits: " + e.getMessage());
+            }
+        }
+
+        return limits;
+    }
+
+    /**
+     * @deprecated use {@link #extractJsScanLimits(String)} for structured parsing
+     */
+    public String extractJsScanCredits(String json) {
+        JsScanLimits limits = extractJsScanLimits(json);
+        if (limits.remaining < 0) {
+            return null;
+        }
+        return String.valueOf(Math.max(0, limits.remaining) + Math.max(0, limits.addOn));
+    }
+
+    private String extractJsonObjectBlock(String json, String field) {
+        if (json == null || field == null) {
+            return null;
+        }
+        Pattern p = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*\\{");
+        Matcher m = p.matcher(json);
+        if (!m.find()) {
+            return null;
+        }
+        int start = m.end() - 1;
+        int brace = 0;
+        for (int i = start; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '{') {
+                brace++;
+            } else if (c == '}') {
+                brace--;
+                if (brace == 0) {
+                    return json.substring(start, i + 1);
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer extractJsonIntField(String json, String field) {
+        if (json == null || field == null) {
+            return null;
+        }
+        try {
+            Pattern p = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*(\\d+)");
+            Matcher m = p.matcher(json);
+            if (m.find()) {
+                return Integer.parseInt(m.group(1));
             }
         } catch (Exception ignored) {
         }
