@@ -732,7 +732,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
      * Returns a list of URL entries with timestamps
      */
     public List<JsUrlEntry> fetchUrls(String workspaceId, String apiKey, int page) {
-        return apiClient.fetchIntelligenceData(workspaceId, apiKey, "urls", page);
+        return apiClient.fetchIntelligenceData(workspaceId, apiKey, "extractedurls", page);
     }
     
     /**

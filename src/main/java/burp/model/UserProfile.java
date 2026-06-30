@@ -6,4 +6,3 @@ public class UserProfile {
     public String remaining;
     public String accountType;
 }
-
