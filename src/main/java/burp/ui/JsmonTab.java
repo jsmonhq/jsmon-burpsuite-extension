@@ -191,6 +191,8 @@ public class JsmonTab extends JPanel {
     private JToggleButton autoRefreshToggle;
     private JLabel autoRefreshStatusLabel;
     private javax.swing.Timer profileAutoRefreshTimer;
+    private javax.swing.Timer profileRefreshDebounceTimer;
+    private volatile int profileFetchSeq = 0;
     private JCheckBox automateScanCheckbox;
     private JToggleButton vpnModeToggle;
     private JTextArea statusArea;
@@ -578,10 +580,29 @@ public class JsmonTab extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         setBackground(theme.background);
         
-        // Top panel with Update Available button
+        // Top panel — app header (Chrome/Firefox extension style)
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setOpaque(false);
-        topPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0));
+        topPanel.setOpaque(true);
+        topPanel.setBackground(theme.headerBackground);
+        topPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, theme.border),
+            new EmptyBorder(10, 14, 10, 14)
+        ));
+
+        JLabel brandLabel = new JLabel("JSMON");
+        brandLabel.setFont(brandLabel.getFont().deriveFont(Font.BOLD, 15f));
+        brandLabel.setForeground(theme.textPrimary);
+
+        JLabel versionLabel = new JLabel("v" + CURRENT_VERSION);
+        versionLabel.setFont(versionLabel.getFont().deriveFont(Font.PLAIN, 11f));
+        versionLabel.setForeground(theme.textSecondary);
+        versionLabel.setBorder(new EmptyBorder(0, 8, 0, 0));
+
+        JPanel brandPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        brandPanel.setOpaque(false);
+        brandPanel.add(brandLabel);
+        brandPanel.add(versionLabel);
+        topPanel.add(brandPanel, BorderLayout.WEST);
 
         manualRefreshButton = createPrimaryButton("↻ Refresh");
         manualRefreshButton.setPreferredSize(new Dimension(96, 28));
@@ -690,9 +711,7 @@ public class JsmonTab extends JPanel {
         // Create header panel with title on left and Get API Key button on right
         JPanel apiKeyHeader = new JPanel(new BorderLayout());
         apiKeyHeader.setOpaque(false);
-        JLabel apiKeyTitle = new JLabel("🔑 API Key");
-        apiKeyTitle.setFont(apiKeyTitle.getFont().deriveFont(Font.BOLD, 14f));
-        apiKeyTitle.setForeground(theme.textPrimary);
+        JLabel apiKeyTitle = createSectionLabel("API KEY");
         apiKeyHeader.add(apiKeyTitle, BorderLayout.WEST);
         
         // Get API Key button - styled with round background and arrow
@@ -780,27 +799,37 @@ public class JsmonTab extends JPanel {
         mainContainer.add(Box.createVerticalStrut(8));
 
         // ========== USER INFO SECTION ==========
-        JPanel userCard = createModernCard("👤 User");
+        JPanel userCard = createModernCard("");
+        JPanel userHeader = new JPanel(new BorderLayout());
+        userHeader.setOpaque(false);
+        userHeader.add(createSectionLabel("USER"), BorderLayout.WEST);
+        userCard.add(userHeader, BorderLayout.NORTH);
+
         JPanel userContent = new JPanel();
         userContent.setLayout(new BoxLayout(userContent, BoxLayout.Y_AXIS));
         userContent.setOpaque(false);
+        userContent.setBorder(new EmptyBorder(4, 0, 0, 0));
 
         userNameValue = createValueLabel("—");
         userEmailValue = createValueLabel("—");
         userLimitsValue = createValueLabel("—");
 
-        userContent.add(createKeyValueRow("Name:", userNameValue));
-        userContent.add(Box.createVerticalStrut(4));
-        userContent.add(createKeyValueRow("Email:", userEmailValue));
-        userContent.add(Box.createVerticalStrut(4));
-        userContent.add(createKeyValueRow("JSScan Credits:", userLimitsValue));
+        userContent.add(createKeyValueRow("Name", userNameValue));
+        userContent.add(Box.createVerticalStrut(6));
+        userContent.add(createKeyValueRow("Email", userEmailValue));
+        userContent.add(Box.createVerticalStrut(6));
+        userContent.add(createKeyValueRow("Scan credits", userLimitsValue));
 
         userCard.add(userContent, BorderLayout.CENTER);
         mainContainer.add(userCard);
         mainContainer.add(Box.createVerticalStrut(8));
         
         // ========== WORKSPACE SECTION ==========
-        JPanel workspaceCard = createModernCard("📁 Workspace");
+        JPanel workspaceCard = createModernCard("");
+        JPanel workspaceHeader = new JPanel(new BorderLayout());
+        workspaceHeader.setOpaque(false);
+        workspaceHeader.add(createSectionLabel("WORKSPACE"), BorderLayout.WEST);
+        workspaceCard.add(workspaceHeader, BorderLayout.NORTH);
         
         // Workspace selection
         JPanel selectPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 5));
@@ -872,10 +901,16 @@ public class JsmonTab extends JPanel {
         mainContainer.add(Box.createVerticalStrut(8));
         
         // ========== DOMAIN SCOPING SECTION ==========
-        JPanel domainCard = createModernCard("🌐 Domain Scoping");
+        JPanel domainCard = createModernCard("");
+        JPanel domainHeader = new JPanel(new BorderLayout());
+        domainHeader.setOpaque(false);
+        domainHeader.add(createSectionLabel("TARGET SCOPE"), BorderLayout.WEST);
+        domainCard.add(domainHeader, BorderLayout.NORTH);
+
         JPanel domainContent = new JPanel(new BorderLayout(0, 8));
         domainContent.setOpaque(false);
-        domainContent.add(createLabel("Scoped Domain(s) - one per line (includes subdomains):", false), BorderLayout.NORTH);
+        domainContent.setBorder(new EmptyBorder(4, 0, 0, 0));
+        domainContent.add(createLabel("Scoped domains (one per line, includes subdomains)", false), BorderLayout.NORTH);
         scopedDomainField = new JTextArea();
         scopedDomainField.setBackground(theme.inputBackground);
         scopedDomainField.setForeground(theme.inputForeground);
@@ -909,9 +944,7 @@ public class JsmonTab extends JPanel {
         // Create header panel with title on left and VPN toggle on right
         JPanel automateHeader = new JPanel(new BorderLayout());
         automateHeader.setOpaque(false);
-        JLabel automateTitle = new JLabel("⚡ Automation");
-        automateTitle.setFont(automateTitle.getFont().deriveFont(Font.BOLD, 14f));
-        automateTitle.setForeground(theme.textPrimary);
+        JLabel automateTitle = createSectionLabel("AUTOMATION");
         automateHeader.add(automateTitle, BorderLayout.WEST);
         
         // VPN Mode toggle - styled as a modern toggle switch
@@ -1960,16 +1993,13 @@ public class JsmonTab extends JPanel {
         card.setBackground(theme.cardBackground);
         card.setBorder(BorderFactory.createCompoundBorder(
             new LineBorder(theme.border, 1, true),
-            new EmptyBorder(10, 12, 10, 12) // Reduced padding
+            new EmptyBorder(12, 14, 12, 14)
         ));
         
-        // Title label
         if (title != null && !title.isEmpty()) {
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
-        titleLabel.setForeground(theme.textPrimary);
+            JLabel titleLabel = createSectionLabel(title);
             titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
-        card.add(titleLabel, BorderLayout.NORTH);
+            card.add(titleLabel, BorderLayout.NORTH);
         }
         
         return card;
@@ -1993,11 +2023,18 @@ public class JsmonTab extends JPanel {
         return label;
     }
 
+    private JLabel createSectionLabel(String text) {
+        JLabel label = new JLabel(text.toUpperCase());
+        label.setForeground(theme.textSecondary);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 11f));
+        return label;
+    }
+
     private JPanel createKeyValueRow(String key, JLabel valueLabel) {
-        JPanel row = new JPanel(new BorderLayout());
+        JPanel row = new JPanel(new BorderLayout(8, 0));
         row.setOpaque(false);
         JLabel keyLabel = createLabel(key, false);
-        keyLabel.setPreferredSize(new Dimension(120, 18));
+        keyLabel.setPreferredSize(new Dimension(110, 18));
         row.add(keyLabel, BorderLayout.WEST);
         row.add(valueLabel, BorderLayout.CENTER);
         return row;
@@ -2446,12 +2483,25 @@ public class JsmonTab extends JPanel {
     }
     
     private JButton createPrimaryButton(String text) {
-        JButton button = new JButton(text);
+        JButton button = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 7, 7);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
         button.setBackground(theme.buttonPrimary);
         button.setForeground(Color.WHITE);
+        button.setOpaque(false);
+        button.setContentAreaFilled(false);
+        button.setBorderPainted(false);
         button.setBorder(BorderFactory.createEmptyBorder(8, 16, 8, 16));
         button.setFocusPainted(false);
-        button.setFont(button.getFont().deriveFont(12f));
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 12f));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         button.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -2550,15 +2600,28 @@ public class JsmonTab extends JPanel {
     }
     
     private JButton createSecondaryButton(String text) {
-        JButton button = new JButton(text);
+        JButton button = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 7, 7);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
         button.setBackground(theme.buttonSecondary);
         button.setForeground(theme.textPrimary);
+        button.setOpaque(false);
+        button.setContentAreaFilled(false);
+        button.setBorderPainted(false);
         button.setBorder(BorderFactory.createCompoundBorder(
-            new LineBorder(theme.border, 1),
+            new LineBorder(theme.border, 1, true),
             new EmptyBorder(6, 12, 6, 12)
         ));
         button.setFocusPainted(false);
-        button.setFont(button.getFont().deriveFont(12f));
+        button.setFont(button.getFont().deriveFont(Font.PLAIN, 11f));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         button.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -3497,12 +3560,29 @@ public class JsmonTab extends JPanel {
     }
 
     /**
+     * Debounced profile refresh after scans — waits for backend limit deduction.
+     */
+    public void scheduleProfileRefresh() {
+        SwingUtilities.invokeLater(() -> {
+            if (profileRefreshDebounceTimer != null) {
+                profileRefreshDebounceTimer.stop();
+            }
+            profileRefreshDebounceTimer = new javax.swing.Timer(800, e -> {
+                profileRefreshDebounceTimer.stop();
+                fetchAndDisplayUserProfile(false);
+            });
+            profileRefreshDebounceTimer.setRepeats(false);
+            profileRefreshDebounceTimer.start();
+        });
+    }
+
+    /**
      * Fetch and display user profile (name, email, limits)
      */
     public void fetchAndDisplayUserProfile() {
         fetchAndDisplayUserProfile(false);
     }
-    
+
     public void fetchAndDisplayUserProfile(boolean showStatus) {
         String apiKey = apiKeyField.getText().trim();
         if (apiKey.isEmpty()) {
@@ -3510,10 +3590,14 @@ public class JsmonTab extends JPanel {
             return;
         }
 
+        final int seq = ++profileFetchSeq;
         new Thread(() -> {
             try {
                 UserProfile profile = extension.fetchUserProfile();
                 SwingUtilities.invokeLater(() -> {
+                    if (seq != profileFetchSeq) {
+                        return;
+                    }
                     updateUserProfileUI(profile);
                     if (showStatus && profile != null) {
                         appendStatus("✓ Loaded user profile");
@@ -3531,7 +3615,7 @@ public class JsmonTab extends JPanel {
     private void updateUserProfileUI(UserProfile profile) {
         String name = (profile != null && profile.name != null && !profile.name.isEmpty()) ? profile.name : "—";
         String email = (profile != null && profile.email != null && !profile.email.isEmpty()) ? profile.email : "—";
-        String limits = (profile != null && profile.remaining != null && !profile.remaining.isEmpty()) ? profile.remaining : "—";
+        String limits = (profile != null) ? profile.getJsScanDisplay() : "—";
 
         if (userNameValue != null) userNameValue.setText(name);
         if (userEmailValue != null) userEmailValue.setText(email);

@@ -28,67 +28,81 @@ public class JsmonTheme {
     public final Color tabBackground;
     public final Color tabForeground;
     public final Color caretColor;
-    
+    public final Color badgeBackground;
+    public final Color badgeForeground;
+    public final Color badgeBorder;
+    public final Color headerBackground;
+    public final Color headerBorder;
+    public final Color accentBlue;
+
     public JsmonTheme(boolean isDark) {
+        accentBlue = new Color(0, 122, 255); // #007aff — matches browser extensions
+
         if (isDark) {
-            // Dark theme
-            background = new Color(43, 43, 43);
-            cardBackground = new Color(50, 50, 50);
-            textPrimary = new Color(220, 220, 220);
-            textSecondary = new Color(200, 200, 200);
-            textValue = new Color(220, 220, 220);
-            border = new Color(70, 70, 70);
-            inputBackground = new Color(35, 35, 35);
-            inputForeground = new Color(220, 220, 220);
-            inputBorder = new Color(70, 70, 70);
-            buttonPrimary = new Color(70, 130, 200);
-            buttonPrimaryHover = new Color(90, 150, 220);
-            buttonSecondary = new Color(60, 60, 60);
-            buttonSecondaryHover = new Color(75, 75, 75);
-            tableBackground = new Color(30, 30, 30);
-            tableForeground = new Color(200, 200, 200);
-            tableGrid = new Color(60, 60, 60);
-            tableSelection = new Color(60, 100, 150);
-            tableHeaderBackground = new Color(50, 50, 50);
-            tableHeaderForeground = new Color(220, 220, 220);
-            statusBackground = new Color(30, 30, 30);
-            statusForeground = new Color(200, 200, 200);
-            tabBackground = new Color(43, 43, 43);
-            tabForeground = new Color(200, 200, 200);
-            caretColor = new Color(100, 150, 255);
+            background = new Color(28, 28, 30);
+            cardBackground = new Color(38, 38, 40);
+            textPrimary = new Color(245, 245, 247);
+            textSecondary = new Color(142, 142, 147);
+            textValue = new Color(245, 245, 247);
+            border = new Color(58, 58, 60);
+            inputBackground = new Color(44, 44, 46);
+            inputForeground = new Color(245, 245, 247);
+            inputBorder = new Color(72, 72, 74);
+            buttonPrimary = accentBlue;
+            buttonPrimaryHover = new Color(0, 111, 230);
+            buttonSecondary = new Color(44, 44, 46);
+            buttonSecondaryHover = new Color(58, 58, 60);
+            tableBackground = new Color(28, 28, 30);
+            tableForeground = new Color(235, 235, 240);
+            tableGrid = new Color(58, 58, 60);
+            tableSelection = new Color(0, 90, 180);
+            tableHeaderBackground = new Color(44, 44, 46);
+            tableHeaderForeground = new Color(245, 245, 247);
+            statusBackground = new Color(28, 28, 30);
+            statusForeground = new Color(200, 200, 205);
+            tabBackground = new Color(28, 28, 30);
+            tabForeground = new Color(200, 200, 205);
+            caretColor = accentBlue;
+            badgeBackground = new Color(30, 58, 95);
+            badgeForeground = new Color(147, 197, 253);
+            badgeBorder = new Color(59, 130, 246);
+            headerBackground = new Color(38, 38, 40);
+            headerBorder = new Color(58, 58, 60);
         } else {
-            // Light theme
-            background = new Color(245, 245, 245);
-            cardBackground = new Color(255, 255, 255);
-            textPrimary = new Color(30, 30, 30);
-            textSecondary = new Color(60, 60, 60);
-            textValue = new Color(30, 30, 30);
-            border = new Color(200, 200, 200);
-            inputBackground = new Color(255, 255, 255);
-            inputForeground = new Color(30, 30, 30);
-            inputBorder = new Color(180, 180, 180);
-            buttonPrimary = new Color(70, 130, 200);
-            buttonPrimaryHover = new Color(90, 150, 220);
-            buttonSecondary = new Color(240, 240, 240);
-            buttonSecondaryHover = new Color(220, 220, 220);
-            tableBackground = new Color(255, 255, 255);
-            tableForeground = new Color(30, 30, 30);
-            tableGrid = new Color(220, 220, 220);
-            tableSelection = new Color(200, 220, 255);
-            tableHeaderBackground = new Color(240, 240, 240);
-            tableHeaderForeground = new Color(30, 30, 30);
-            statusBackground = new Color(255, 255, 255);
-            statusForeground = new Color(30, 30, 30);
-            tabBackground = new Color(245, 245, 245);
-            tabForeground = new Color(60, 60, 60);
-            caretColor = new Color(70, 130, 200);
+            background = new Color(245, 245, 247); // #f5f5f7 page
+            cardBackground = Color.WHITE;
+            textPrimary = new Color(10, 10, 15); // #0a0a0f
+            textSecondary = new Color(142, 142, 147); // #8e8e93
+            textValue = new Color(10, 10, 15);
+            border = new Color(232, 232, 232); // #e8e8e8
+            inputBackground = new Color(245, 245, 247);
+            inputForeground = new Color(10, 10, 15);
+            inputBorder = new Color(232, 232, 232);
+            buttonPrimary = accentBlue;
+            buttonPrimaryHover = new Color(0, 111, 230); // #006fe6
+            buttonSecondary = new Color(245, 245, 247);
+            buttonSecondaryHover = new Color(236, 236, 240);
+            tableBackground = Color.WHITE;
+            tableForeground = new Color(10, 10, 15);
+            tableGrid = new Color(232, 232, 232);
+            tableSelection = new Color(219, 234, 254);
+            tableHeaderBackground = new Color(245, 245, 247);
+            tableHeaderForeground = new Color(10, 10, 15);
+            statusBackground = Color.WHITE;
+            statusForeground = new Color(82, 82, 91);
+            tabBackground = new Color(245, 245, 247);
+            tabForeground = new Color(82, 82, 91);
+            caretColor = accentBlue;
+            badgeBackground = new Color(219, 234, 254); // #dbeafe
+            badgeForeground = new Color(29, 78, 216); // #1d4ed8
+            badgeBorder = new Color(147, 197, 253); // #93c5fd
+            headerBackground = Color.WHITE;
+            headerBorder = border;
         }
     }
-    
+
     public static JsmonTheme getCurrentTheme() {
-        Color defaultBg = null;
-        
-        defaultBg = UIManager.getColor("Panel.background");
+        Color defaultBg = UIManager.getColor("Panel.background");
         if (defaultBg == null) {
             defaultBg = UIManager.getColor("control");
         }
@@ -101,7 +115,6 @@ public class JsmonTheme {
         if (defaultBg == null) {
             defaultBg = UIManager.getColor("window");
         }
-        
         if (defaultBg == null) {
             try {
                 defaultBg = UIManager.getDefaults().getColor("Panel.background");
@@ -109,19 +122,15 @@ public class JsmonTheme {
                 return new JsmonTheme(false);
             }
         }
-        
         if (defaultBg == null) {
             return new JsmonTheme(false);
         }
-        
+
         float[] hsb = Color.RGBtoHSB(defaultBg.getRed(), defaultBg.getGreen(), defaultBg.getBlue(), null);
         boolean isDark = hsb[2] < 0.6;
-        
         if (hsb[2] > 0.9) {
             isDark = false;
         }
-        
         return new JsmonTheme(isDark);
     }
 }
-

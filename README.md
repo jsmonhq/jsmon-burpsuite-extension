@@ -39,7 +39,7 @@ A powerful Burp Suite extension that automatically scans scannable files using t
 1. Open the **JSMon** tab in Burp Suite
 2. Enter your JSMon API key in the "🔑 API Key" field
 3. Click **Fetch Workspaces** to retrieve your workspaces
-4. Your user profile (name, email, JSScan credits) will be displayed automatically
+4. Your user profile (name, email, scan credits) will be displayed automatically
 
 ### Step 2: Select or Create Workspace
 
@@ -186,7 +186,7 @@ The status log at the bottom shows:
 ## Tips & Best Practices
 
 1. **Start with Domain Scoping**: Limit your scans to your target domain to avoid scanning unrelated files
-2. **Monitor JSScan Credits**: Check your remaining credits in the User section
+2. **Monitor Scan Credits**: Check your remaining credits in the User section
 3. **Use Manual Scan First**: Run a manual scan to see what data is available before enabling automatic scanning
 4. **Export Data Regularly**: Use the Copy All buttons to export data for further analysis
 5. **Check Secrets First**: Always review the Secrets tab first as it contains the most critical findings

@@ -45,7 +45,7 @@ public class JsmonApiClient {
         
         try {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(URI.create(API_BASE_URL + "/getWorkspaces"))
+                    .uri(URI.create(API_BASE_URL + "/listWorkspaces?limit=100"))
                     .header("X-Jsmon-Key", apiKey.trim())
                     .GET()
                     .build();
@@ -167,13 +167,19 @@ public class JsmonApiClient {
 
             String name = jsonParser.extractJsonFieldSimple(body, "name");
             String email = jsonParser.extractJsonFieldSimple(body, "email");
-            String remaining = jsonParser.extractJsScanCredits(body);
+            String tier = jsonParser.extractJsonFieldSimple(body, "tier");
             String accountType = jsonParser.extractJsonFieldSimple(body, "type");
+
+            JsmonJsonParser.JsScanLimits limits = jsonParser.extractJsScanLimits(body);
 
             UserProfile profile = new UserProfile();
             profile.name = name;
             profile.email = email;
-            profile.remaining = remaining;
+            profile.tier = tier;
+            profile.jsScanRemaining = limits.remaining;
+            profile.jsScanTotal = limits.total;
+            profile.addOnJsScan = limits.addOn;
+            profile.remaining = profile.getJsScanDisplay();
             profile.accountType = accountType;
             return profile;
         } catch (Exception e) {
