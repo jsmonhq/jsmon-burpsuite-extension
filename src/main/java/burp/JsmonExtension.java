@@ -180,8 +180,8 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 tab.appendStatusMessage("  ✓ Success: " + url);
                 // Fetch secrets after successful scan
                 tab.fetchAndDisplaySecrets();
-                // Refresh user profile to update JSScan credits
-                tab.fetchAndDisplayUserProfile();
+                // Refresh user profile to update JSScan credits (debounced after deduction)
+                tab.scheduleProfileRefresh();
             } else {
                 String errorMsg = result.getErrorMessage();
                 if (errorMsg != null && !errorMsg.isEmpty()) {
@@ -231,8 +231,8 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                 tab.appendStatusMessage("  ✓ VPN Mode - Success: " + url);
                 // Fetch secrets after successful scan
                 tab.fetchAndDisplaySecrets();
-                // Refresh user profile to update JSScan credits
-                tab.fetchAndDisplayUserProfile();
+                // Refresh user profile to update JSScan credits (debounced after deduction)
+                tab.scheduleProfileRefresh();
             } else {
                 String errorMsg = result.getErrorMessage();
                 if (errorMsg != null && !errorMsg.isEmpty()) {
@@ -631,7 +631,7 @@ public class JsmonExtension implements BurpExtension, HttpHandler {
                     logging.logToOutput("Jsmon: [" + fileNum + "/" + scannableFiles.size() + "] ✓ " + modePrefix + "Successfully scanned: " + url);
                     // Refresh user profile to update JSScan credits after each successful scan
                     if (tab != null) {
-                        tab.fetchAndDisplayUserProfile();
+                        tab.scheduleProfileRefresh();
                     }
                 } else {
                     failedCount++;
