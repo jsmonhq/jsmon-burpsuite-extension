@@ -187,8 +187,10 @@ public class JsmonTab extends JPanel {
     private JLabel userNameValue;
     private JLabel userEmailValue;
     private JLabel userLimitsValue;
-    private JLabel creditsBadgeLabel;
-    private JButton refreshCreditsButton;
+    private JButton manualRefreshButton;
+    private JToggleButton autoRefreshToggle;
+    private JLabel autoRefreshStatusLabel;
+    private javax.swing.Timer profileAutoRefreshTimer;
     private javax.swing.Timer profileRefreshDebounceTimer;
     private volatile int profileFetchSeq = 0;
     private JCheckBox automateScanCheckbox;
@@ -404,10 +406,12 @@ public class JsmonTab extends JPanel {
             if (userNameValue != null) userNameValue.setForeground(theme.textValue);
             if (userEmailValue != null) userEmailValue.setForeground(theme.textValue);
             if (userLimitsValue != null) userLimitsValue.setForeground(theme.textValue);
-            styleCreditsBadge(creditsBadgeLabel);
-            if (refreshCreditsButton != null) {
-                refreshCreditsButton.setBackground(theme.buttonSecondary);
-                refreshCreditsButton.setForeground(theme.textPrimary);
+            if (manualRefreshButton != null) {
+                manualRefreshButton.setBackground(theme.buttonPrimary);
+                manualRefreshButton.setForeground(Color.WHITE);
+            }
+            if (autoRefreshStatusLabel != null) {
+                updateAutoRefreshStatusUI();
             }
             
             // Update Get API Key button specifically
@@ -600,17 +604,27 @@ public class JsmonTab extends JPanel {
         brandPanel.add(versionLabel);
         topPanel.add(brandPanel, BorderLayout.WEST);
 
-        creditsBadgeLabel = createCreditsBadge("— scans left");
-        refreshCreditsButton = createSecondaryButton("↻ Refresh");
-        refreshCreditsButton.setPreferredSize(new Dimension(88, 28));
-        refreshCreditsButton.setToolTipText("Refresh scan credits");
-        refreshCreditsButton.addActionListener(e -> fetchAndDisplayUserProfile(true));
+        manualRefreshButton = createPrimaryButton("↻ Refresh");
+        manualRefreshButton.setPreferredSize(new Dimension(96, 28));
+        manualRefreshButton.setFont(manualRefreshButton.getFont().deriveFont(Font.BOLD, 11f));
+        manualRefreshButton.setToolTipText("Refresh scan credits now");
+        manualRefreshButton.addActionListener(e -> fetchAndDisplayUserProfile(true));
 
-        JPanel creditsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        creditsPanel.setOpaque(false);
-        creditsPanel.add(creditsBadgeLabel);
-        creditsPanel.add(refreshCreditsButton);
-        topPanel.add(creditsPanel, BorderLayout.CENTER);
+        JPanel autoRefreshPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        autoRefreshPanel.setOpaque(false);
+
+        JLabel autoRefreshLabel = new JLabel("Auto Refresh (every 5 sec)");
+        autoRefreshLabel.setFont(autoRefreshLabel.getFont().deriveFont(11f));
+        autoRefreshLabel.setForeground(theme.textSecondary);
+
+        autoRefreshToggle = createAutoRefreshSwitch();
+        autoRefreshStatusLabel = new JLabel("OFF");
+        autoRefreshStatusLabel.setFont(autoRefreshStatusLabel.getFont().deriveFont(Font.BOLD, 11f));
+        autoRefreshStatusLabel.setForeground(theme.textSecondary);
+
+        autoRefreshPanel.add(autoRefreshLabel);
+        autoRefreshPanel.add(autoRefreshToggle);
+        autoRefreshPanel.add(autoRefreshStatusLabel);
         
         // Update Available button (initially hidden) - moved to main page
         updateAvailableButton = new JButton("🔄 Update Available") {
@@ -659,9 +673,12 @@ public class JsmonTab extends JPanel {
             }
         });
         
-        // Add update button to top panel (right side)
+        // Add refresh and update buttons to top panel (right side)
         JPanel topRightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         topRightPanel.setOpaque(false);
+        topRightPanel.add(manualRefreshButton);
+        topRightPanel.add(Box.createHorizontalStrut(8));
+        topRightPanel.add(autoRefreshPanel);
         topRightPanel.add(updateAvailableButton);
         topPanel.add(topRightPanel, BorderLayout.EAST);
         
@@ -1497,7 +1514,7 @@ public class JsmonTab extends JPanel {
         jsIntelligenceSubTabs.addTab("🛣️ API Paths", apiPathsPanel);
         
         // Sub-tab 3: URLs
-        JPanel urlsPanel = createIntelligenceTablePanel("URL", "urls");
+        JPanel urlsPanel = createIntelligenceTablePanel("URL", "extractedurls");
         jsIntelligenceSubTabs.addTab("🔗 URLs", urlsPanel);
         
         // Sub-tab 4: Domains
@@ -1578,7 +1595,7 @@ public class JsmonTab extends JPanel {
             } else if (selectedIndex == 1) { // API Paths tab
                 fetchAndDisplayApiPaths(apiPathsCurrentPage);
             } else if (selectedIndex == 2) { // URLs tab
-                fetchAndDisplayUrls(urlsCurrentPage);
+                fetchIntelligenceData("extractedurls", urlsCurrentPage, urlsTable, urlsTableModel);
             } else if (selectedIndex == 3) { // Domains tab
                 fetchAndDisplayDomains(domainsCurrentPage);
             } else if (selectedIndex == 4) { // IP Addresses tab
@@ -1607,7 +1624,7 @@ public class JsmonTab extends JPanel {
                     } else if (subTabIndex == 1) { // API Paths
                         fetchAndDisplayApiPaths(apiPathsCurrentPage);
                     } else if (subTabIndex == 2) { // URLs
-                        fetchAndDisplayUrls(urlsCurrentPage);
+                        fetchIntelligenceData("extractedurls", urlsCurrentPage, urlsTable, urlsTableModel);
                     } else if (subTabIndex == 3) { // Domains
                         fetchAndDisplayDomains(domainsCurrentPage);
                     } else if (subTabIndex == 4) { // IP Addresses
@@ -2013,26 +2030,6 @@ public class JsmonTab extends JPanel {
         return label;
     }
 
-    private JLabel createCreditsBadge(String text) {
-        JLabel badge = new JLabel(text);
-        styleCreditsBadge(badge);
-        return badge;
-    }
-
-    private void styleCreditsBadge(JLabel badge) {
-        if (badge == null) {
-            return;
-        }
-        badge.setOpaque(true);
-        badge.setBackground(theme.badgeBackground);
-        badge.setForeground(theme.badgeForeground);
-        badge.setFont(badge.getFont().deriveFont(Font.BOLD, 10.5f));
-        badge.setBorder(BorderFactory.createCompoundBorder(
-            new LineBorder(theme.badgeBorder, 1, true),
-            new EmptyBorder(4, 10, 4, 10)
-        ));
-    }
-
     private JPanel createKeyValueRow(String key, JLabel valueLabel) {
         JPanel row = new JPanel(new BorderLayout(8, 0));
         row.setOpaque(false);
@@ -2061,7 +2058,7 @@ public class JsmonTab extends JPanel {
         
         // Assign to appropriate instance variable
         JTable table;
-        if ("urls".equals(fieldName)) {
+        if ("extractedurls".equals(fieldName)) {
             urlsTableModel = tableModel;
             table = new JTable(tableModel);
             urlsTable = table;
@@ -2096,6 +2093,7 @@ public class JsmonTab extends JPanel {
         table.setSelectionForeground(theme.textPrimary);
         table.setRowHeight(20);
         table.setShowGrid(true);
+        table.setFillsViewportHeight(false);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         
         // Enable single-cell selection
@@ -2154,6 +2152,7 @@ public class JsmonTab extends JPanel {
         scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         scroll.getViewport().setBackground(theme.tableBackground);
+        scroll.getVerticalScrollBar().setUnitIncrement(table.getRowHeight() * 3);
         
         // Pagination controls
         JPanel paginationPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
@@ -2215,7 +2214,7 @@ public class JsmonTab extends JPanel {
         switch (fieldName) {
             case "jsurls": return "totalJsUrls";
             case "apipaths": return "totalApiPaths";
-            case "urls": return "totalUrls";
+            case "extractedurls": return "totalExtractedUrls";
             case "domains": return "totalDomains";
             case "ipaddresses": return "totalIpAddresses";
             case "emails": return "totalEmails";
@@ -2231,7 +2230,7 @@ public class JsmonTab extends JPanel {
         switch (fieldName) {
             case "jsurls": return jsUrlsCurrentPage;
             case "apipaths": return apiPathsCurrentPage;
-            case "urls": return urlsCurrentPage;
+            case "extractedurls": return urlsCurrentPage;
             case "domains": return domainsCurrentPage;
             case "ipaddresses": return ipAddressesCurrentPage;
             case "emails": return emailsCurrentPage;
@@ -2245,7 +2244,7 @@ public class JsmonTab extends JPanel {
         switch (fieldName) {
             case "jsurls": jsUrlsCurrentPage = page; break;
             case "apipaths": apiPathsCurrentPage = page; break;
-            case "urls": urlsCurrentPage = page; break;
+            case "extractedurls": urlsCurrentPage = page; break;
             case "domains": domainsCurrentPage = page; break;
             case "ipaddresses": ipAddressesCurrentPage = page; break;
             case "emails": emailsCurrentPage = page; break;
@@ -2268,9 +2267,13 @@ public class JsmonTab extends JPanel {
                 fieldCounts.getOrDefault("totalNpmConfusions",
                 fieldCounts.getOrDefault("npmconfusion", 0)));
         }
+        if ("extractedurls".equals(fieldName) && totalCount == 0) {
+            totalCount = fieldCounts.getOrDefault("totalUrls",
+                fieldCounts.getOrDefault("urls", 0));
+        }
         
-        // Assuming 100 items per page
-        int totalPages = (int) Math.ceil(totalCount / 100.0);
+        // Assuming INTELLIGENCE_PAGE_LIMIT items per page
+        int totalPages = (int) Math.ceil(totalCount / (double) burp.api.JsmonApiClient.INTELLIGENCE_PAGE_LIMIT);
         return totalPages > 0 ? totalPages : 1; // At least 1 page
     }
     
@@ -2295,7 +2298,7 @@ public class JsmonTab extends JPanel {
                 return extension.fetchJsUrls(workspaceId, apiKey, page);
             case "apipaths":
                 return extension.fetchApiPaths(workspaceId, apiKey, page);
-            case "urls":
+            case "extractedurls":
                 return extension.fetchUrls(workspaceId, apiKey, page);
             case "domains":
                 return extension.fetchDomains(workspaceId, apiKey, page);
@@ -2515,6 +2518,85 @@ public class JsmonTab extends JPanel {
         });
         
         return button;
+    }
+
+    private JToggleButton createAutoRefreshSwitch() {
+        JToggleButton toggle = new JToggleButton() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int width = getWidth();
+                int height = getHeight();
+                int trackHeight = 18;
+                int trackWidth = 36;
+                int knobSize = 14;
+                int trackY = (height - trackHeight) / 2;
+                int trackX = (width - trackWidth) / 2;
+
+                if (isSelected()) {
+                    g2.setColor(theme.buttonPrimary);
+                } else {
+                    g2.setColor(new Color(158, 158, 158));
+                }
+                g2.fillRoundRect(trackX, trackY, trackWidth, trackHeight, trackHeight, trackHeight);
+
+                g2.setColor(Color.WHITE);
+                int knobX = isSelected() ? trackX + trackWidth - knobSize - 2 : trackX + 2;
+                int knobY = trackY + (trackHeight - knobSize) / 2;
+                g2.fillOval(knobX, knobY, knobSize, knobSize);
+
+                g2.dispose();
+            }
+        };
+        toggle.setPreferredSize(new Dimension(44, 24));
+        toggle.setOpaque(false);
+        toggle.setContentAreaFilled(false);
+        toggle.setBorderPainted(false);
+        toggle.setFocusPainted(false);
+        toggle.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        toggle.setToolTipText("Automatically refresh scan credits every 5 seconds");
+        toggle.addActionListener(e -> {
+            if (toggle.isSelected()) {
+                startProfileAutoRefresh();
+                appendStatus("✓ Auto-refresh enabled (every 5 seconds)");
+            } else {
+                stopProfileAutoRefresh();
+                appendStatus("✗ Auto-refresh disabled");
+            }
+            updateAutoRefreshStatusUI();
+        });
+        return toggle;
+    }
+
+    private void updateAutoRefreshStatusUI() {
+        if (autoRefreshStatusLabel == null || autoRefreshToggle == null) {
+            return;
+        }
+        if (autoRefreshToggle.isSelected()) {
+            autoRefreshStatusLabel.setText("ON");
+            autoRefreshStatusLabel.setForeground(theme.buttonPrimary);
+        } else {
+            autoRefreshStatusLabel.setText("OFF");
+            autoRefreshStatusLabel.setForeground(theme.textSecondary);
+        }
+        autoRefreshToggle.repaint();
+    }
+
+    private void startProfileAutoRefresh() {
+        if (profileAutoRefreshTimer == null) {
+            profileAutoRefreshTimer = new javax.swing.Timer(5000, e -> fetchAndDisplayUserProfile(false));
+            profileAutoRefreshTimer.setRepeats(true);
+        }
+        fetchAndDisplayUserProfile(false);
+        profileAutoRefreshTimer.start();
+    }
+
+    private void stopProfileAutoRefresh() {
+        if (profileAutoRefreshTimer != null) {
+            profileAutoRefreshTimer.stop();
+        }
     }
     
     private JButton createSecondaryButton(String text) {
@@ -3447,8 +3529,9 @@ public class JsmonTab extends JPanel {
                     fieldCounts.getOrDefault("jsurls", 0));
                 int apiPathsCount = fieldCounts.getOrDefault("totalApiPaths", 
                     fieldCounts.getOrDefault("apipaths", 0));
-                int urlsCount = fieldCounts.getOrDefault("totalUrls", 
-                    fieldCounts.getOrDefault("urls", 0));
+                int urlsCount = fieldCounts.getOrDefault("totalExtractedUrls",
+                    fieldCounts.getOrDefault("totalUrls",
+                    fieldCounts.getOrDefault("extractedurls", 0)));
                 int domainsCount = fieldCounts.getOrDefault("totalDomains", 
                     fieldCounts.getOrDefault("domains", 0));
                 int ipAddressesCount = fieldCounts.getOrDefault("totalIpAddresses", 
@@ -3533,15 +3616,10 @@ public class JsmonTab extends JPanel {
         String name = (profile != null && profile.name != null && !profile.name.isEmpty()) ? profile.name : "—";
         String email = (profile != null && profile.email != null && !profile.email.isEmpty()) ? profile.email : "—";
         String limits = (profile != null) ? profile.getJsScanDisplay() : "—";
-        String badge = (profile != null) ? profile.getJsScanBadgeText() : "— scans left";
 
         if (userNameValue != null) userNameValue.setText(name);
         if (userEmailValue != null) userEmailValue.setText(email);
         if (userLimitsValue != null) userLimitsValue.setText(limits);
-        if (creditsBadgeLabel != null) {
-            creditsBadgeLabel.setText(badge);
-            styleCreditsBadge(creditsBadgeLabel);
-        }
     }
     
     /**

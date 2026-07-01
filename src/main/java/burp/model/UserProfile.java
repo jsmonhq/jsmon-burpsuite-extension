@@ -24,10 +24,6 @@ public class UserProfile {
         if (available < 0) {
             return "—";
         }
-        if (jsScanTotal > 0) {
-            int displayTotal = jsScanTotal + Math.max(0, addOnJsScan);
-            return available + " / " + displayTotal;
-        }
         return String.valueOf(available);
     }
 

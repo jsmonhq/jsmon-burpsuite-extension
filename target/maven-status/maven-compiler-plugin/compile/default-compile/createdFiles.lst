@@ -7,6 +7,8 @@ burp/model/JsUrlEntry.class
 burp/util/JsmonJsonParser.class
 burp/ui/JsmonTab$1.class
 burp/ui/JsmonTab$13.class
+burp/ui/JsmonTab$23.class
+burp/ui/JsmonTab$22.class
 burp/ui/JsmonTab$18.class
 burp/api/JsmonApiClient$SendResult.class
 burp/ui/JsmonTab$15.class
@@ -29,6 +31,8 @@ burp/ui/JsmonTab$14.class
 burp/ui/JsmonTab$21.class
 burp/JsmonExtension.class
 burp/ui/JsmonTab$Theme.class
+burp/ui/JsmonTab$24.class
 burp/util/JsmonUrlProcessor.class
 burp/ui/JsmonTab$11.class
 burp/ui/JsmonTab$2.class
+burp/util/JsmonJsonParser$JsScanLimits.class

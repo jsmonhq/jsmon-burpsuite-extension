@@ -295,6 +295,9 @@ public class JsmonJsonParser {
                 
                 for (String obj : objects) {
                     String url = extractJsonFieldSimple(obj, "value");
+                    if (url == null || url.isEmpty()) {
+                        url = extractJsonFieldSimple(obj, "url");
+                    }
                     
                     if (url != null && !url.isEmpty()) {
                         String timestamp = null;

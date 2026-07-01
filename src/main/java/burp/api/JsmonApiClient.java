@@ -21,6 +21,7 @@ import java.util.Set;
 
 public class JsmonApiClient {
     private static final String API_BASE_URL = "https://api.jsmon.sh/api/v2";
+    public static final int INTELLIGENCE_PAGE_LIMIT = 100;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Logging logging;
     private final JsmonJsonParser jsonParser;
@@ -514,7 +515,7 @@ public class JsmonApiClient {
         try {
             String endpoint = API_BASE_URL + "/intelligence?wkspId=" +
                     URLEncoder.encode(workspaceId, StandardCharsets.UTF_8.toString()) +
-                    "&options=" + options + "&page=" + page + "&runId=&search=&status=";
+                    "&options=" + options + "&page=" + page + "&limit=" + INTELLIGENCE_PAGE_LIMIT;
 
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
